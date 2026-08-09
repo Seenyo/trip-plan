@@ -110,6 +110,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
   const mapRef = useRef(null);
   const overlays = useRef([]);
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
+  const [routeStatus, setRouteStatus] = useState('idle');
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
@@ -131,6 +132,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
 
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
+    let cancelled = false;
     const points = day.activities.filter((item) => item.coords).map((item) => item.coords);
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
@@ -159,6 +161,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
     }
     overlays.current.forEach((overlay) => overlay.setMap(null));
     overlays.current = [];
+    setRouteStatus(points.length > 1 ? 'loading' : 'idle');
     const bounds = new window.google.maps.LatLngBounds();
     points.forEach((point, index) => {
       const marker = new window.google.maps.Marker({
@@ -172,13 +175,46 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       bounds.extend(point);
     });
     if (points.length > 1) {
-      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#FF5722', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
-      overlays.current.push(route);
       mapRef.current.fitBounds(bounds, 80);
+      const drawDrivingRoute = async () => {
+        try {
+          const { Route } = await window.google.maps.importLibrary('routes');
+          const { routes } = await Route.computeRoutes({
+            origin: points[0],
+            destination: points[points.length - 1],
+            intermediates: points.slice(1, -1).map((location) => ({ location })),
+            travelMode: 'DRIVING',
+            polylineQuality: 'HIGH_QUALITY',
+            fields: ['path', 'viewport'],
+          });
+          if (cancelled) return;
+          const primaryRoute = routes?.[0];
+          if (!primaryRoute) throw new Error('No driving route found');
+          const routeLines = primaryRoute.createPolylines({
+            polylineOptions: {
+              strokeColor: '#FF5722',
+              strokeOpacity: 0.9,
+              strokeWeight: 5,
+            },
+          });
+          routeLines.forEach((routeLine) => {
+            routeLine.setMap(mapRef.current);
+            overlays.current.push(routeLine);
+          });
+          if (primaryRoute.viewport) mapRef.current.fitBounds(primaryRoute.viewport, 80);
+          setRouteStatus('ready');
+        } catch (error) {
+          if (cancelled) return;
+          console.warn('Unable to draw the driving route.', error);
+          setRouteStatus('error');
+        }
+      };
+      drawDrivingRoute();
     } else {
       mapRef.current.setCenter(center);
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
+    return () => { cancelled = true; };
   }, [day, mapStatus, onMapPick]);
 
   const accessCard = (authorizationError = false) => (
@@ -222,6 +258,8 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       <div className="google-map" ref={mapNode} />
       {mapStatus === 'loading' && <span className="map-loading">Loading map…</span>}
       {mapStatus === 'error' && accessCard(true)}
+      {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">Finding the driving route…</span>}
+      {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">Driving route unavailable</span>}
     </div>
   );
 }
