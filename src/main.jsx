@@ -179,29 +179,49 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
-          const { routes } = await Route.computeRoutes({
+          const routeRequest = {
             origin: points[0],
             destination: points[points.length - 1],
             intermediates: points.slice(1, -1).map((location) => ({ location })),
             travelMode: 'DRIVING',
             polylineQuality: 'HIGH_QUALITY',
             fields: ['path', 'viewport'],
-          });
+          };
+          const { routes } = await Route.computeRoutes(routeRequest);
           if (cancelled) return;
-          const primaryRoute = routes?.[0];
-          if (!primaryRoute) throw new Error('No driving route found');
-          const routeLines = primaryRoute.createPolylines({
+          let drivingRoutes = routes?.[0] ? [routes[0]] : [];
+          if (!drivingRoutes.length) {
+            const legs = points.slice(0, -1).map((origin, index) => ({ origin, destination: points[index + 1] }));
+            const legResults = await Promise.all(legs.map(async ({ origin, destination }) => {
+              try {
+                const result = await Route.computeRoutes({
+                  origin,
+                  destination,
+                  travelMode: 'DRIVING',
+                  polylineQuality: 'HIGH_QUALITY',
+                  fields: ['path'],
+                });
+                return result.routes?.[0] || null;
+              } catch {
+                return null;
+              }
+            }));
+            if (cancelled) return;
+            drivingRoutes = legResults.filter(Boolean);
+          }
+          if (!drivingRoutes.length) throw new Error('No driving route found');
+          const routeLines = drivingRoutes.flatMap((route) => route.createPolylines({
             polylineOptions: {
               strokeColor: '#FF5722',
               strokeOpacity: 0.9,
               strokeWeight: 5,
             },
-          });
+          }));
           routeLines.forEach((routeLine) => {
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
           });
-          if (primaryRoute.viewport) mapRef.current.fitBounds(primaryRoute.viewport, 80);
+          if (drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
           setRouteStatus('ready');
         } catch (error) {
           if (cancelled) return;
