@@ -181,7 +181,18 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
     }
   }, [day, mapStatus, onMapPick]);
 
-  if (!apiKey || mapStatus === 'error') {
+  const accessCard = (authorizationError = false) => (
+    <button className="map-key-card" onClick={onRequestKey}>
+      <span className="map-key-icon"><KeyRound size={18} /></span>
+      <span>
+        <strong>{authorizationError ? 'Authorize Google Maps' : 'Connect Google Maps'}</strong>
+        <small>{authorizationError ? 'Allow this site in your Google Cloud key restrictions' : 'Add your API key to enable search and map picking'}</small>
+      </span>
+      <ChevronRight size={18} />
+    </button>
+  );
+
+  if (!apiKey) {
     return (
       <div className="map-fallback" aria-label="Map preview">
         <div className="map-grid" />
@@ -202,18 +213,17 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
             aria-label={item.title}
           >{index + 1}</button>
         ))}
-        <button className="map-key-card" onClick={onRequestKey}>
-          <span className="map-key-icon"><KeyRound size={18} /></span>
-          <span>
-            <strong>{apiKey ? 'Authorize Google Maps' : 'Connect Google Maps'}</strong>
-            <small>{apiKey ? 'Allow this site in your Google Cloud key restrictions' : 'Add your API key to enable search and map picking'}</small>
-          </span>
-          <ChevronRight size={18} />
-        </button>
+        {accessCard()}
       </div>
     );
   }
-  return <div className="google-map" ref={mapNode}><span className="map-loading">Loading map…</span></div>;
+  return (
+    <div className="google-map-shell">
+      <div className="google-map" ref={mapNode} />
+      {mapStatus === 'loading' && <span className="map-loading">Loading map…</span>}
+      {mapStatus === 'error' && accessCard(true)}
+    </div>
+  );
 }
 
 function SearchBar({ apiKey, onResult, onRequestKey }) {
