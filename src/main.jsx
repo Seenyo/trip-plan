@@ -148,7 +148,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
             polylineQuality: 'HIGH_QUALITY',
             fields: ['path', 'viewport'],
           };
-          const { routes } = await Route.computeRoutes(routeRequest);
+          let routes = [];
+          try {
+            const result = await Route.computeRoutes(routeRequest);
+            routes = result.routes || [];
+          } catch {
+            routes = [];
+          }
           if (cancelled) return;
           let drivingRoutes = routes?.[0] ? [routes[0]] : [];
           if (!drivingRoutes.length) {
