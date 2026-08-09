@@ -114,6 +114,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
     window.__roamGoogleReady = () => setMapStatus('ready');
+    window.gm_authFailure = () => setMapStatus('error');
     const existing = document.querySelector('script[data-roam-maps]');
     if (existing) return;
     const script = document.createElement('script');
@@ -203,7 +204,10 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
         ))}
         <button className="map-key-card" onClick={onRequestKey}>
           <span className="map-key-icon"><KeyRound size={18} /></span>
-          <span><strong>Connect Google Maps</strong><small>Add your API key to enable search and map picking</small></span>
+          <span>
+            <strong>{apiKey ? 'Authorize Google Maps' : 'Connect Google Maps'}</strong>
+            <small>{apiKey ? 'Allow this site in your Google Cloud key restrictions' : 'Add your API key to enable search and map picking'}</small>
+          </span>
           <ChevronRight size={18} />
         </button>
       </div>
