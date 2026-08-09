@@ -4,15 +4,11 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CirclePlus,
-  Clock3,
-  Ellipsis,
   KeyRound,
   LocateFixed,
-  Map,
   MapPin,
   Menu,
   Navigation,
@@ -35,7 +31,7 @@ const seedTrips = [
     subtitle: 'Small streets, good coffee, late trains',
     startDate: '2026-10-16',
     endDate: '2026-10-19',
-    color: '#ff5a1f',
+    color: '#c97850',
     days: [
       {
         id: 'tokyo-day-1',
@@ -77,7 +73,7 @@ const seedTrips = [
     subtitle: 'Ferries, concrete, sea air',
     startDate: '2027-04-08',
     endDate: '2027-04-12',
-    color: '#3f4edb',
+    color: '#465862',
     days: [
       { id: uid(), date: '2027-04-08', title: 'Across to Naoshima', note: 'Pack light for the ferry.', activities: [] },
       { id: uid(), date: '2027-04-09', title: 'Art House Project', note: '', activities: [] },
@@ -145,9 +141,9 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
         gestureHandling: 'greedy',
         styles: [
           { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dedbd5' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cdd1f6' }] },
-          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#edf3e3' }] },
+          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dde1dc' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#ccd4d3' }] },
+          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#edf0e9' }] },
         ],
       });
       mapRef.current.addListener('click', async (event) => {
@@ -167,15 +163,15 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       const marker = new window.google.maps.Marker({
         position: point,
         map: mapRef.current,
-        label: { text: `${index + 1}`, color: '#17151f', fontWeight: '700' },
-        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#ff5a1f', strokeWeight: 3 },
+        label: { text: `${index + 1}`, color: '#283237', fontWeight: '700' },
+        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#c97850', strokeWeight: 3 },
         zIndex: 5,
       });
       overlays.current.push(marker);
       bounds.extend(point);
     });
     if (points.length > 1) {
-      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#ff5a1f', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
+      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#c97850', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
       overlays.current.push(route);
       mapRef.current.fitBounds(bounds, 80);
     } else {
@@ -200,7 +196,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
           <button
             className={`map-pin pin-${index + 1}`}
             key={item.id}
-            style={{ '--pin-color': index === 0 ? '#ff5a1f' : '#17151f' }}
+            style={{ '--pin-color': index === 0 ? '#c97850' : '#283237' }}
             onClick={() => onMapPick({ coords: item.coords, location: item.location })}
             aria-label={item.title}
           >{index + 1}</button>
@@ -318,9 +314,9 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
         <button className="icon-button subtle" onClick={onEditDay} aria-label="Edit day"><Pencil size={17} /></button>
       </div>
       <div className="day-arrows">
-        <button onClick={() => setDayIndex(Math.max(0, dayIndex - 1))} disabled={dayIndex === 0}><ChevronLeft size={17} /> Previous</button>
+        <button aria-label="Previous day" title="Previous day" onClick={() => setDayIndex(Math.max(0, dayIndex - 1))} disabled={dayIndex === 0}><ChevronLeft size={17} /></button>
         <span>{dayIndex + 1} / {trip.days.length}</span>
-        <button onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}>Next <ChevronRight size={17} /></button>
+        <button aria-label="Next day" title="Next day" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
       <Timeline day={day} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
     </section>
@@ -328,7 +324,7 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
 }
 
 function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose }) {
-  const palette = ['#ff5a1f', '#3f4edb', '#c9f27a'];
+  const palette = ['#c97850', '#465862', '#aebca8'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
       <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="mobile-close" onClick={onClose}><X size={20} /></button></div>
@@ -386,7 +382,7 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
 }
 
 function TripForm({ onSave, onClose }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#ff5a1f' });
+  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#c97850' });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
     <Modal title="Start a new journey" eyebrow="Fresh page" onClose={onClose}>
@@ -495,12 +491,10 @@ function App() {
         <div className="map-hint"><MapPin size={14} /> Tap the map to add a stop</div>
       </section>
       <ItinerarySheet trip={trip} day={day} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onEditDay={() => setModal({ type: 'day', day })} />
-      <nav className="mobile-nav">
-        <button className="active"><Map size={19} /><span>Plan</span></button>
+      <nav className="mobile-nav" aria-label="Quick actions">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>Trips</span></button>
-        <button className="nav-add" onClick={() => setModal({ type: 'activity' })}><Plus size={25} /></button>
+        <button className="nav-add" aria-label="Add a stop" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
         <button onClick={() => setModal({ type: 'settings' })}><Settings size={19} /><span>Settings</span></button>
-        <button onClick={() => setSheetOpen(!sheetOpen)}><Ellipsis size={19} /><span>More</span></button>
       </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
