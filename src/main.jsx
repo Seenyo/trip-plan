@@ -118,7 +118,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
     if (existing) return;
     const script = document.createElement('script');
     script.dataset.roamMaps = 'true';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&loading=async&v=weekly`;
     script.async = true;
     script.onerror = () => setMapStatus('error');
     document.head.appendChild(script);
@@ -425,7 +425,9 @@ function SettingsModal({ apiKey, setApiKey, onClose }) {
 
 function App() {
   const [trips, setTrips] = useStoredState('roam.trips.v1', seedTrips);
-  const [apiKey, setApiKey] = useStoredState('roam.googleMapsKey', import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '');
+  const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
+  const apiKey = savedApiKey || bundledApiKey;
   const [selectedId, setSelectedId] = useState(trips[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
