@@ -38,6 +38,17 @@ const dateRange = (trip) => {
   return `${start} — ${end}`;
 };
 
+const distanceKm = (start, end) => {
+  const toRadians = (degrees) => degrees * (Math.PI / 180);
+  const latitudeDelta = toRadians(end.lat - start.lat);
+  const longitudeDelta = toRadians(end.lng - start.lng);
+  const startLatitude = toRadians(start.lat);
+  const endLatitude = toRadians(end.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
 function useStoredState(key, initialValue) {
   const [value, setValue] = useState(() => {
     try {
@@ -51,7 +62,7 @@ function useStoredState(key, initialValue) {
   return [value, setValue];
 }
 
-function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -80,6 +91,9 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
     if (mapStatus !== 'ready' || !mapNode.current) return;
     let cancelled = false;
     const points = day.activities.filter((item) => item.coords).map((item) => item.coords);
+    const previousPoint = previousDay?.activities.filter((item) => item.coords).at(-1)?.coords;
+    const connectPreviousDay = previousPoint && points[0] && distanceKm(previousPoint, points[0]) < 900;
+    const routePoints = connectPreviousDay ? [previousPoint, ...points] : points;
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
       mapRef.current = new window.google.maps.Map(mapNode.current, {
@@ -107,8 +121,9 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
     }
     overlays.current.forEach((overlay) => overlay.setMap(null));
     overlays.current = [];
-    setRouteStatus(points.length > 1 ? 'loading' : 'idle');
+    setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
     const bounds = new window.google.maps.LatLngBounds();
+    if (connectPreviousDay) bounds.extend(previousPoint);
     points.forEach((point, index) => {
       const marker = new window.google.maps.Marker({
         position: point,
@@ -120,15 +135,15 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       overlays.current.push(marker);
       bounds.extend(point);
     });
-    if (points.length > 1) {
+    if (routePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 80);
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
           const routeRequest = {
-            origin: points[0],
-            destination: points[points.length - 1],
-            intermediates: points.slice(1, -1).map((location) => ({ location })),
+            origin: routePoints[0],
+            destination: routePoints[routePoints.length - 1],
+            intermediates: routePoints.slice(1, -1).map((location) => ({ location })),
             travelMode: 'DRIVING',
             polylineQuality: 'HIGH_QUALITY',
             fields: ['path', 'viewport'],
@@ -137,7 +152,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
           if (cancelled) return;
           let drivingRoutes = routes?.[0] ? [routes[0]] : [];
           if (!drivingRoutes.length) {
-            const legs = points.slice(0, -1).map((origin, index) => ({ origin, destination: points[index + 1] }));
+            const legs = routePoints.slice(0, -1).map((origin, index) => ({ origin, destination: routePoints[index + 1] }));
             const legResults = await Promise.all(legs.map(async ({ origin, destination }) => {
               try {
                 const result = await Route.computeRoutes({
@@ -181,7 +196,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [day, mapStatus, onMapPick]);
+  }, [day, previousDay, mapStatus, onMapPick]);
 
   const accessCard = (authorizationError = false) => (
     <button className="map-key-card" onClick={onRequestKey}>
@@ -506,7 +521,7 @@ function App() {
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })}><Settings size={19} /></button>
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
-        <GoogleMap apiKey={apiKey} day={day} onMapPick={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
+        <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> Tap the map to add a stop</div>
       </section>
