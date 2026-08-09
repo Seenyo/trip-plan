@@ -31,7 +31,7 @@ const seedTrips = [
     subtitle: 'Small streets, good coffee, late trains',
     startDate: '2026-10-16',
     endDate: '2026-10-19',
-    color: '#c97850',
+    color: '#FF5722',
     days: [
       {
         id: 'tokyo-day-1',
@@ -73,7 +73,7 @@ const seedTrips = [
     subtitle: 'Ferries, concrete, sea air',
     startDate: '2027-04-08',
     endDate: '2027-04-12',
-    color: '#465862',
+    color: '#76ABAE',
     days: [
       { id: uid(), date: '2027-04-08', title: 'Across to Naoshima', note: 'Pack light for the ferry.', activities: [] },
       { id: uid(), date: '2027-04-09', title: 'Art House Project', note: '', activities: [] },
@@ -141,9 +141,9 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
         gestureHandling: 'greedy',
         styles: [
           { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dde1dc' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#ccd4d3' }] },
-          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#edf0e9' }] },
+          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#76ABAE' }] },
+          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
         ],
       });
       mapRef.current.addListener('click', async (event) => {
@@ -163,15 +163,15 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       const marker = new window.google.maps.Marker({
         position: point,
         map: mapRef.current,
-        label: { text: `${index + 1}`, color: '#283237', fontWeight: '700' },
-        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#c97850', strokeWeight: 3 },
+        label: { text: `${index + 1}`, color: '#303841', fontWeight: '700' },
+        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#F5F5F5', fillOpacity: 1, strokeColor: '#FF5722', strokeWeight: 3 },
         zIndex: 5,
       });
       overlays.current.push(marker);
       bounds.extend(point);
     });
     if (points.length > 1) {
-      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#c97850', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
+      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#FF5722', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
       overlays.current.push(route);
       mapRef.current.fitBounds(bounds, 80);
     } else {
@@ -196,7 +196,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
           <button
             className={`map-pin pin-${index + 1}`}
             key={item.id}
-            style={{ '--pin-color': index === 0 ? '#c97850' : '#283237' }}
+            style={{ '--pin-color': index === 0 ? '#FF5722' : '#303841' }}
             onClick={() => onMapPick({ coords: item.coords, location: item.location })}
             aria-label={item.title}
           >{index + 1}</button>
@@ -324,7 +324,7 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
 }
 
 function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose }) {
-  const palette = ['#c97850', '#465862', '#aebca8'];
+  const palette = ['#FF5722', '#76ABAE', '#F5F5F5'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
       <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="mobile-close" onClick={onClose}><X size={20} /></button></div>
@@ -382,7 +382,7 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
 }
 
 function TripForm({ onSave, onClose }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#c97850' });
+  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#FF5722' });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
     <Modal title="Start a new journey" eyebrow="Fresh page" onClose={onClose}>
