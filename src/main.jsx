@@ -20,12 +20,24 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { domesticTrip } from './domesticTrip';
 import { icelandTrip } from './icelandTrip';
 import './styles.css';
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-const seedTrips = [icelandTrip];
+const seedTrips = [icelandTrip, domesticTrip];
+const migrateTrips = () => {
+  try {
+    const previous = JSON.parse(localStorage.getItem('roam.trips.v2') || '[]');
+    if (Array.isArray(previous) && previous.length) {
+      const retained = previous.filter((trip) => !['tokyo-weekender', 'setouchi-notes'].includes(trip.id));
+      const withIceland = retained.some((trip) => trip.id === icelandTrip.id) ? retained : [icelandTrip, ...retained];
+      return withIceland.some((trip) => trip.id === domesticTrip.id) ? withIceland : [...withIceland, domesticTrip];
+    }
+  } catch { /* fall through to the current built-in trips */ }
+  return seedTrips;
+};
 
 const formatDay = (date, options = { weekday: 'short', month: 'short', day: 'numeric' }) => {
   if (!date) return 'Date TBD';
@@ -51,11 +63,12 @@ const distanceKm = (start, end) => {
 
 function useStoredState(key, initialValue) {
   const [value, setValue] = useState(() => {
+    const resolvedInitial = () => typeof initialValue === 'function' ? initialValue() : initialValue;
     try {
       const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : initialValue;
+      return stored ? JSON.parse(stored) : resolvedInitial();
     } catch {
-      return initialValue;
+      return resolvedInitial();
     }
   });
   useEffect(() => localStorage.setItem(key, JSON.stringify(value)), [key, value]);
@@ -90,10 +103,14 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
     let cancelled = false;
-    const points = day.activities.filter((item) => item.coords).map((item) => item.coords);
-    const previousPoint = previousDay?.activities.filter((item) => item.coords).at(-1)?.coords;
-    const connectPreviousDay = previousPoint && points[0] && distanceKm(previousPoint, points[0]) < 900;
-    const routePoints = connectPreviousDay ? [previousPoint, ...points] : points;
+    const mappedStops = day.activities.map((item, index) => ({ item, index })).filter(({ item }) => item.coords);
+    const points = mappedStops.map(({ item }) => item.coords);
+    const drivablePoints = mappedStops.filter(({ item }) => item.route !== false).map(({ item }) => item.coords);
+    const previousPoint = previousDay?.activities.filter((item) => item.coords && item.route !== false).at(-1)?.coords;
+    const connectPreviousDay = day.drivingFromPrevious !== false
+      && previousPoint && drivablePoints[0] && distanceKm(previousPoint, drivablePoints[0]) < 900;
+    const rawRoutePoints = connectPreviousDay ? [previousPoint, ...drivablePoints] : drivablePoints;
+    const routePoints = rawRoutePoints.filter((point, index) => index === 0 || distanceKm(rawRoutePoints[index - 1], point) > 0.05);
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
       mapRef.current = new window.google.maps.Map(mapNode.current, {
@@ -124,16 +141,16 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
     setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
     const bounds = new window.google.maps.LatLngBounds();
     if (connectPreviousDay) bounds.extend(previousPoint);
-    points.forEach((point, index) => {
+    mappedStops.forEach(({ item, index }) => {
       const marker = new window.google.maps.Marker({
-        position: point,
+        position: item.coords,
         map: mapRef.current,
         label: { text: `${index + 1}`, color: '#303841', fontWeight: '700' },
         icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#F5F5F5', fillOpacity: 1, strokeColor: '#FF5722', strokeWeight: 3 },
         zIndex: 5,
       });
       overlays.current.push(marker);
-      bounds.extend(point);
+      bounds.extend(item.coords);
     });
     if (routePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 80);
@@ -197,6 +214,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
         }
       };
       drawDrivingRoute();
+    } else if (points.length > 1) {
+      mapRef.current.fitBounds(bounds, 80);
     } else {
       mapRef.current.setCenter(center);
       mapRef.current.setZoom(points.length ? 14 : 12);
@@ -463,7 +482,7 @@ function SettingsModal({ apiKey, setApiKey, onClose }) {
 }
 
 function App() {
-  const [trips, setTrips] = useStoredState('roam.trips.v2', seedTrips);
+  const [trips, setTrips] = useStoredState('roam.trips.v3', migrateTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
   const apiKey = savedApiKey || bundledApiKey;
