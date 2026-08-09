@@ -35,7 +35,7 @@ const seedTrips = [
     subtitle: 'Small streets, good coffee, late trains',
     startDate: '2026-10-16',
     endDate: '2026-10-19',
-    color: '#ff6b4a',
+    color: '#ff5a1f',
     days: [
       {
         id: 'tokyo-day-1',
@@ -77,7 +77,7 @@ const seedTrips = [
     subtitle: 'Ferries, concrete, sea air',
     startDate: '2027-04-08',
     endDate: '2027-04-12',
-    color: '#287f78',
+    color: '#3f4edb',
     days: [
       { id: uid(), date: '2027-04-08', title: 'Across to Naoshima', note: 'Pack light for the ferry.', activities: [] },
       { id: uid(), date: '2027-04-09', title: 'Art House Project', note: '', activities: [] },
@@ -145,9 +145,9 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
         gestureHandling: 'greedy',
         styles: [
           { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dce5df' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#badde1' }] },
-          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#eef2e8' }] },
+          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dedbd5' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cdd1f6' }] },
+          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#edf3e3' }] },
         ],
       });
       mapRef.current.addListener('click', async (event) => {
@@ -167,15 +167,15 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
       const marker = new window.google.maps.Marker({
         position: point,
         map: mapRef.current,
-        label: { text: `${index + 1}`, color: '#173b42', fontWeight: '700' },
-        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#ff6b4a', strokeWeight: 3 },
+        label: { text: `${index + 1}`, color: '#17151f', fontWeight: '700' },
+        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#ff5a1f', strokeWeight: 3 },
         zIndex: 5,
       });
       overlays.current.push(marker);
       bounds.extend(point);
     });
     if (points.length > 1) {
-      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#ff6b4a', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
+      const route = new window.google.maps.Polyline({ path: points, strokeColor: '#ff5a1f', strokeWeight: 4, strokeOpacity: 0.9, map: mapRef.current });
       overlays.current.push(route);
       mapRef.current.fitBounds(bounds, 80);
     } else {
@@ -200,7 +200,7 @@ function GoogleMap({ apiKey, day, onMapPick, onRequestKey }) {
           <button
             className={`map-pin pin-${index + 1}`}
             key={item.id}
-            style={{ '--pin-color': index === 0 ? '#ff6b4a' : '#173b42' }}
+            style={{ '--pin-color': index === 0 ? '#ff5a1f' : '#17151f' }}
             onClick={() => onMapPick({ coords: item.coords, location: item.location })}
             aria-label={item.title}
           >{index + 1}</button>
@@ -328,14 +328,15 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
 }
 
 function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose }) {
+  const palette = ['#ff5a1f', '#3f4edb', '#c9f27a'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
       <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="mobile-close" onClick={onClose}><X size={20} /></button></div>
       <div className="rail-heading"><span>Your journeys</span><button onClick={onAdd}><Plus size={17} /></button></div>
       <div className="trip-list">
-        {trips.map((trip) => (
+        {trips.map((trip, index) => (
           <button key={trip.id} className={`trip-card ${trip.id === selectedId ? 'active' : ''}`} onClick={() => { onSelect(trip.id); onClose(); }}>
-            <span className="trip-card-top"><span className="trip-dot" style={{ background: trip.color }} /><small>{trip.days.length} days</small>{trips.length > 1 && <span className="trip-trash" onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}><Trash2 size={14} /></span>}</span>
+            <span className="trip-card-top"><span className="trip-dot" style={{ background: palette[index % palette.length] }} /><small>{trip.days.length} days</small>{trips.length > 1 && <span className="trip-trash" onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}><Trash2 size={14} /></span>}</span>
             <strong>{trip.title}</strong>
             <span>{dateRange(trip)}</span>
           </button>
@@ -385,7 +386,7 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
 }
 
 function TripForm({ onSave, onClose }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#ff6b4a' });
+  const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#ff5a1f' });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
     <Modal title="Start a new journey" eyebrow="Fresh page" onClose={onClose}>
@@ -509,4 +510,7 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+const rootElement = document.getElementById('root');
+const appRoot = window.__roamRoot ?? createRoot(rootElement);
+window.__roamRoot = appRoot;
+appRoot.render(<App />);
