@@ -10,12 +10,16 @@
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
+    "@blocknote/core": "0.53.0",
+    "@blocknote/mantine": "0.53.0",
+    "@blocknote/react": "0.53.0",
+    "@supabase/supabase-js": "2.112.2",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "gh-pages": "latest"

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowLeft,
@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  FilePlus2,
   KeyRound,
   LocateFixed,
   MapPin,
@@ -22,9 +23,21 @@ import {
 } from 'lucide-react';
 import { domesticTrip } from './domesticTrip';
 import { icelandTrip } from './icelandTrip';
+import { useSharedWorkspace } from './useSharedWorkspace';
 import './styles.css';
 
+const PlanWorkspace = lazy(() => import('./PlanWorkspace'));
+
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
+function ViewSwitch({ view, onChange }) {
+  return (
+    <div className="plan-view-switch" aria-label="表示を切り替える">
+      <button className={view === 'itinerary' ? 'active' : ''} onClick={() => onChange('itinerary')}>旅程</button>
+      <button className={view === 'plan' ? 'active' : ''} onClick={() => onChange('plan')}>プラン</button>
+    </div>
+  );
+}
 
 const seedTrips = [icelandTrip, domesticTrip];
 const migrateTrips = () => {
@@ -381,7 +394,7 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
   );
 }
 
-function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose }) {
+function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose, syncStatus }) {
   const palette = ['#FF5722', '#76ABAE', '#F5F5F5'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
@@ -397,7 +410,7 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose 
         ))}
       </div>
       <button className="new-trip-button" onClick={onAdd}><CirclePlus size={19} /> Plan another trip</button>
-      <div className="rail-foot"><span>Saved in this browser</span><span className="saved-dot"><Check size={12} /> Saved</span></div>
+      <div className="rail-foot"><span>{syncStatus === 'error' ? 'Saved in this browser' : 'Shared workspace'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? 'Syncing' : syncStatus === 'error' ? 'Local' : 'Synced'}</span></div>
     </aside>
   );
 }
@@ -482,10 +495,12 @@ function SettingsModal({ apiKey, setApiKey, onClose }) {
 }
 
 function App() {
-  const [trips, setTrips] = useStoredState('roam.trips.v3', migrateTrips);
+  const initialTrips = useMemo(() => migrateTrips(), []);
+  const { trips, setTrips, planDocument, updatePlan, syncStatus } = useSharedWorkspace(initialTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
   const apiKey = savedApiKey || bundledApiKey;
+  const [view, setView] = useStoredState('roam.view', 'itinerary');
   const [selectedId, setSelectedId] = useState(trips[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -530,19 +545,52 @@ function App() {
   };
   const mapPick = useCallback((place) => setModal({ type: 'activity', activity: { time: '10:00', title: '', notes: '', ...place } }), []);
 
+  const addPlanActivity = ({ tripId, dayId, activity }) => {
+    const saved = { ...activity, id: uid() };
+    setTrips((current) => current.map((item) => item.id !== tripId ? item : ({
+      ...item,
+      days: item.days.map((tripDay) => tripDay.id !== dayId ? tripDay : ({
+        ...tripDay,
+        activities: [...tripDay.activities, saved].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
+      })),
+    })));
+    setSelectedId(tripId);
+    const targetTrip = trips.find((item) => item.id === tripId);
+    const targetIndex = targetTrip?.days.findIndex((item) => item.id === dayId) ?? 0;
+    setDayIndex(Math.max(0, targetIndex));
+  };
+
   useEffect(() => { setDayIndex(0); }, [selectedId]);
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
+
+  if (view === 'plan' && trips.length) {
+    return (
+      <Suspense fallback={<div className="plan-loading">プランを開いています…</div>}>
+        <PlanWorkspace
+          trips={trips}
+          planDocument={planDocument}
+          onPlanChange={updatePlan}
+          onAddActivity={addPlanActivity}
+          selectedTripId={selectedId}
+          status={syncStatus}
+          view={view}
+          onViewChange={setView}
+        />
+      </Suspense>
+    );
+  }
 
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>Restore Iceland trip</button></div>;
 
   return (
     <main className="app-shell">
-      <TripRail trips={trips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} />
+      <TripRail trips={trips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
       {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="Close trips" />}
       <section className="map-stage">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setRailOpen(true)}><Menu size={20} /></button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
+          <div className="itinerary-view-switch"><ViewSwitch view={view} onChange={setView} /></div>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })}><Settings size={19} /></button>
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
@@ -554,7 +602,7 @@ function App() {
       <nav className="mobile-nav" aria-label="Quick actions">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>Trips</span></button>
         <button className="nav-add" aria-label="Add a stop" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
-        <button onClick={() => setModal({ type: 'settings' })}><Settings size={19} /><span>Settings</span></button>
+        <button onClick={() => setView('plan')}><FilePlus2 size={19} /><span>Plan</span></button>
       </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
