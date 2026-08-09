@@ -20,66 +20,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { icelandTrip } from './icelandTrip';
 import './styles.css';
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-const seedTrips = [
-  {
-    id: 'tokyo-weekender',
-    title: 'Tokyo, unhurried',
-    subtitle: 'Small streets, good coffee, late trains',
-    startDate: '2026-10-16',
-    endDate: '2026-10-19',
-    color: '#FF5722',
-    days: [
-      {
-        id: 'tokyo-day-1',
-        date: '2026-10-16',
-        title: 'Old Tokyo & blue hour',
-        note: 'Land softly. Keep the evening loose.',
-        activities: [
-          { id: uid(), time: '10:30', title: 'Kissaten breakfast', location: 'Kayaba Coffee, Yanaka', notes: 'Try the egg sandwich.', coords: { lat: 35.7221, lng: 139.7709 } },
-          { id: uid(), time: '12:30', title: 'Walk Yanaka Ginza', location: 'Yanaka Ginza, Tokyo', notes: 'Take the long way through the cemetery.', coords: { lat: 35.7275, lng: 139.7667 } },
-          { id: uid(), time: '17:10', title: 'Sunset by the river', location: 'Sumida Park, Tokyo', notes: 'Blue hour begins around 17:30.', coords: { lat: 35.7113, lng: 139.8025 } },
-        ],
-      },
-      {
-        id: 'tokyo-day-2',
-        date: '2026-10-17',
-        title: 'Design shops & vinyl',
-        note: 'West side day. Reservations at 19:30.',
-        activities: [
-          { id: uid(), time: '09:30', title: 'Coffee in Kiyosumi', location: 'Kiyosumi Shirakawa, Tokyo', notes: '', coords: { lat: 35.6818, lng: 139.8007 } },
-          { id: uid(), time: '13:00', title: 'Daikanyama wandering', location: 'Daikanyama T-Site, Tokyo', notes: 'Books, lunch, and stationery.', coords: { lat: 35.6488, lng: 139.6992 } },
-          { id: uid(), time: '19:30', title: 'Dinner in Ebisu', location: 'Ebisu, Tokyo', notes: 'Reservation saved in email.', coords: { lat: 35.6467, lng: 139.7101 } },
-        ],
-      },
-      {
-        id: 'tokyo-day-3',
-        date: '2026-10-18',
-        title: 'A slower Sunday',
-        note: 'One anchor, everything else optional.',
-        activities: [
-          { id: uid(), time: '10:00', title: 'Morning at Meiji Jingu', location: 'Meiji Jingu, Tokyo', notes: '', coords: { lat: 35.6764, lng: 139.6993 } },
-          { id: uid(), time: '14:00', title: 'Picnic in Yoyogi', location: 'Yoyogi Park, Tokyo', notes: 'Pick up fruit and onigiri.', coords: { lat: 35.6717, lng: 139.6949 } },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'setouchi-notes',
-    title: 'Setouchi art islands',
-    subtitle: 'Ferries, concrete, sea air',
-    startDate: '2027-04-08',
-    endDate: '2027-04-12',
-    color: '#76ABAE',
-    days: [
-      { id: uid(), date: '2027-04-08', title: 'Across to Naoshima', note: 'Pack light for the ferry.', activities: [] },
-      { id: uid(), date: '2027-04-09', title: 'Art House Project', note: '', activities: [] },
-    ],
-  },
-];
+const seedTrips = [icelandTrip];
 
 const formatDay = (date, options = { weekday: 'short', month: 'short', day: 'numeric' }) => {
   if (!date) return 'Date TBD';
@@ -496,7 +442,7 @@ function SettingsModal({ apiKey, setApiKey, onClose }) {
 }
 
 function App() {
-  const [trips, setTrips] = useStoredState('roam.trips.v1', seedTrips);
+  const [trips, setTrips] = useStoredState('roam.trips.v2', seedTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
   const apiKey = savedApiKey || bundledApiKey;
@@ -547,7 +493,7 @@ function App() {
   useEffect(() => { setDayIndex(0); }, [selectedId]);
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
 
-  if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>Restore sample trips</button></div>;
+  if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>Restore Iceland trip</button></div>;
 
   return (
     <main className="app-shell">
