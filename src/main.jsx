@@ -53,13 +53,14 @@ const migrateTrips = () => {
 };
 
 const formatDay = (date, options = { weekday: 'short', month: 'short', day: 'numeric' }) => {
-  if (!date) return 'Date TBD';
-  return new Intl.DateTimeFormat('en', options).format(new Date(`${date}T12:00:00`));
+  if (!date) return '日付未定';
+  return new Intl.DateTimeFormat('ja-JP', options).format(new Date(`${date}T12:00:00`));
 };
 
 const dateRange = (trip) => {
-  const start = formatDay(trip.startDate, { month: 'short', day: 'numeric' });
-  const end = formatDay(trip.endDate, { month: 'short', day: 'numeric', year: 'numeric' });
+  const sameYear = trip.startDate?.slice(0, 4) === trip.endDate?.slice(0, 4);
+  const start = formatDay(trip.startDate, { year: 'numeric', month: 'short', day: 'numeric' });
+  const end = formatDay(trip.endDate, { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric' });
   return `${start} — ${end}`;
 };
 
@@ -103,7 +104,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
     if (existing) return;
     const script = document.createElement('script');
     script.dataset.roamMaps = 'true';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&loading=async&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&loading=async&v=weekly&language=ja&region=JP`;
     script.async = true;
     script.onerror = () => setMapStatus('error');
     document.head.appendChild(script);
@@ -206,7 +207,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
             if (cancelled) return;
             drivingRoutes = legResults.filter(Boolean);
           }
-          if (!drivingRoutes.length) throw new Error('No driving route found');
+          if (!drivingRoutes.length) throw new Error('車のルートが見つかりませんでした');
           const routeLines = drivingRoutes.flatMap((route) => route.createPolylines({
             polylineOptions: {
               strokeColor: '#FF5722',
@@ -222,7 +223,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
           setRouteStatus('ready');
         } catch (error) {
           if (cancelled) return;
-          console.warn('Unable to draw the driving route.', error);
+          console.warn('車のルートを表示できませんでした。', error);
           setRouteStatus('error');
         }
       };
@@ -240,8 +241,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
     <button className="map-key-card" onClick={onRequestKey}>
       <span className="map-key-icon"><KeyRound size={18} /></span>
       <span>
-        <strong>{authorizationError ? 'Authorize Google Maps' : 'Connect Google Maps'}</strong>
-        <small>{authorizationError ? 'Allow this site in your Google Cloud key restrictions' : 'Add your API key to enable search and map picking'}</small>
+        <strong>{authorizationError ? 'Google Mapsの使用を許可' : 'Google Mapsを接続'}</strong>
+        <small>{authorizationError ? 'Google Cloudのキー制限でこのサイトを許可してください' : '場所検索や地図からの追加にはAPIキーが必要です'}</small>
       </span>
       <ChevronRight size={18} />
     </button>
@@ -249,13 +250,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
 
   if (!apiKey) {
     return (
-      <div className="map-fallback" aria-label="Map preview">
+      <div className="map-fallback" aria-label="地図プレビュー">
         <div className="map-grid" />
         <div className="river river-one" />
         <div className="river river-two" />
-        <span className="map-label label-shibuya">SHIBUYA</span>
-        <span className="map-label label-ueno">UENO</span>
-        <span className="map-label label-ginza">GINZA</span>
+        <span className="map-label label-shibuya">渋谷</span>
+        <span className="map-label label-ueno">上野</span>
+        <span className="map-label label-ginza">銀座</span>
         <svg className="route-line" viewBox="0 0 600 760" preserveAspectRatio="none" aria-hidden="true">
           <path d="M146 180 C220 230, 194 340, 326 360 S440 510, 370 630" />
         </svg>
@@ -275,10 +276,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
   return (
     <div className="google-map-shell">
       <div className="google-map" ref={mapNode} />
-      {mapStatus === 'loading' && <span className="map-loading">Loading map…</span>}
+      {mapStatus === 'loading' && <span className="map-loading">地図を読み込んでいます…</span>}
       {mapStatus === 'error' && accessCard(true)}
-      {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">Finding the driving route…</span>}
-      {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">Driving route unavailable</span>}
+      {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">車のルートを検索しています…</span>}
+      {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">車のルートを表示できません</span>}
     </div>
   );
 }
@@ -302,19 +303,19 @@ function SearchBar({ apiKey, onResult, onRequestKey }) {
   return (
     <form className="map-search" onSubmit={search}>
       <Search size={18} />
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a place" aria-label="Search a place" />
-      {query && <button type="button" className="clear-search" onClick={() => setQuery('')}><X size={15} /></button>}
-      <button className="search-submit" aria-label="Search" disabled={searching}>{searching ? '…' : <ArrowLeft size={16} />}</button>
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="場所を検索" aria-label="場所を検索" />
+      {query && <button type="button" className="clear-search" onClick={() => setQuery('')} aria-label="検索内容を消去"><X size={15} /></button>}
+      <button className="search-submit" aria-label="検索" disabled={searching}>{searching ? '…' : <ArrowLeft size={16} />}</button>
     </form>
   );
 }
 
 function DayStrip({ trip, dayIndex, setDayIndex }) {
   return (
-    <div className="day-strip" role="tablist" aria-label="Trip days">
+    <div className="day-strip" role="tablist" aria-label="旅行の日程">
       {trip.days.map((day, index) => (
         <button key={day.id} className={index === dayIndex ? 'active' : ''} onClick={() => setDayIndex(index)} role="tab" aria-selected={index === dayIndex}>
-          <span>Day {index + 1}</span>
+          <span>{index + 1}日目</span>
           <strong>{formatDay(day.date, { weekday: 'short', day: 'numeric' })}</strong>
         </button>
       ))}
@@ -328,12 +329,12 @@ function Timeline({ day, onEdit, onDelete, onAdd }) {
       {day.activities.length === 0 ? (
         <button className="empty-day" onClick={onAdd}>
           <span><Sparkles size={20} /></span>
-          <strong>Give this day a shape</strong>
-          <small>Add the first place or moment.</small>
+          <strong>この日の予定を作りましょう</strong>
+          <small>最初の場所や予定を追加してください。</small>
         </button>
       ) : day.activities.map((item, index) => (
         <article className="stop" key={item.id}>
-          <div className="stop-time">{item.time || 'Anytime'}</div>
+          <div className="stop-time">{item.time || '時間未定'}</div>
           <div className="stop-track">
             <span className="stop-number">{index + 1}</span>
             {index < day.activities.length - 1 && <span className="stop-rule" />}
@@ -342,16 +343,16 @@ function Timeline({ day, onEdit, onDelete, onAdd }) {
             <div className="stop-heading">
               <h3>{item.title}</h3>
               <div className="stop-actions">
-                <button onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}><Pencil size={15} /></button>
-                <button onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}><Trash2 size={15} /></button>
+                <button onClick={() => onEdit(item)} aria-label={`${item.title}を編集`}><Pencil size={15} /></button>
+                <button onClick={() => onDelete(item.id)} aria-label={`${item.title}を削除`}><Trash2 size={15} /></button>
               </div>
             </div>
-            <p><MapPin size={13} /> {item.location || 'Location not set'}</p>
+            <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
             {item.notes && <small>{item.notes}</small>}
           </div>
         </article>
       ))}
-      {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> Add a stop</button>}
+      {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
     </div>
   );
 }
@@ -373,21 +374,21 @@ function ItinerarySheet({ trip, day, dayIndex, setDayIndex, open, setOpen, onAdd
     touch.current = null;
   };
   return (
-    <section className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="Day itinerary">
-      <button className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse itinerary' : 'Expand itinerary'}><span className="sheet-handle" /></button>
+    <section className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
+      <button className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? '旅程を閉じる' : '旅程を開く'}><span className="sheet-handle" /></button>
       <div className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
       <div className="sheet-title-row">
         <div>
-          <span className="eyebrow">Day {dayIndex + 1} · {formatDay(day.date)}</span>
+          <span className="eyebrow">{dayIndex + 1}日目 · {formatDay(day.date)}</span>
           <h2>{day.title}</h2>
           {day.note && <p>{day.note}</p>}
         </div>
-        <button className="icon-button subtle" onClick={onEditDay} aria-label="Edit day"><Pencil size={17} /></button>
+        <button className="icon-button subtle" onClick={onEditDay} aria-label="この日を編集"><Pencil size={17} /></button>
       </div>
       <div className="day-arrows">
-        <button aria-label="Previous day" title="Previous day" onClick={() => setDayIndex(Math.max(0, dayIndex - 1))} disabled={dayIndex === 0}><ChevronLeft size={17} /></button>
+        <button aria-label="前の日" title="前の日" onClick={() => setDayIndex(Math.max(0, dayIndex - 1))} disabled={dayIndex === 0}><ChevronLeft size={17} /></button>
         <span>{dayIndex + 1} / {trip.days.length}</span>
-        <button aria-label="Next day" title="Next day" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
+        <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
       <Timeline day={day} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
     </section>
@@ -398,19 +399,19 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose,
   const palette = ['#FF5722', '#76ABAE', '#F5F5F5'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
-      <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="mobile-close" onClick={onClose}><X size={20} /></button></div>
-      <div className="rail-heading"><span>Your journeys</span><button onClick={onAdd}><Plus size={17} /></button></div>
+      <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="mobile-close" onClick={onClose} aria-label="旅行一覧を閉じる"><X size={20} /></button></div>
+      <div className="rail-heading"><span>旅行一覧</span><button onClick={onAdd} aria-label="旅行を追加"><Plus size={17} /></button></div>
       <div className="trip-list">
         {trips.map((trip, index) => (
           <button key={trip.id} className={`trip-card ${trip.id === selectedId ? 'active' : ''}`} onClick={() => { onSelect(trip.id); onClose(); }}>
-            <span className="trip-card-top"><span className="trip-dot" style={{ background: palette[index % palette.length] }} /><small>{trip.days.length} days</small>{trips.length > 1 && <span className="trip-trash" onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}><Trash2 size={14} /></span>}</span>
+            <span className="trip-card-top"><span className="trip-dot" style={{ background: palette[index % palette.length] }} /><small>{trip.days.length}日間</small>{trips.length > 1 && <span className="trip-trash" onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}><Trash2 size={14} /></span>}</span>
             <strong>{trip.title}</strong>
             <span>{dateRange(trip)}</span>
           </button>
         ))}
       </div>
-      <button className="new-trip-button" onClick={onAdd}><CirclePlus size={19} /> Plan another trip</button>
-      <div className="rail-foot"><span>{syncStatus === 'error' ? 'Saved in this browser' : 'Shared workspace'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? 'Syncing' : syncStatus === 'error' ? 'Local' : 'Synced'}</span></div>
+      <button className="new-trip-button" onClick={onAdd}><CirclePlus size={19} /> 新しい旅行を作成</button>
+      <div className="rail-foot"><span>{syncStatus === 'error' ? 'このブラウザに保存' : '共有ワークスペース'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? '同期中' : syncStatus === 'error' ? 'ローカル' : '同期済み'}</span></div>
     </aside>
   );
 }
@@ -419,7 +420,7 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section className={`modal ${danger ? 'danger' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
-        <div className="modal-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2></div><button className="icon-button" onClick={onClose}><X size={19} /></button></div>
+        <div className="modal-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="閉じる"><X size={19} /></button></div>
         {children}
       </section>
     </div>
@@ -440,13 +441,13 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
     } finally { setSearching(false); }
   };
   return (
-    <Modal title={initial?.id ? 'Edit this stop' : 'Add a stop'} eyebrow="Day plan" onClose={onClose}>
+    <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title.trim()) onSave({ ...form, id: form.id || uid() }); }}>
-        <label className="field time-field"><span>Time</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
-        <label className="field title-field"><span>What are you doing?</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Dinner, museum, train…" /></label>
-        <label className="field full"><span>Location</span><div className="field-with-button"><input value={form.location} onChange={(e) => set('location', e.target.value)} placeholder="Search a place or paste an address" /><button type="button" onClick={lookup} disabled={!apiKey || searching}>{searching ? '…' : <LocateFixed size={17} />}</button></div>{form.coords && <small className="located"><Check size={12} /> Pinned on the map</small>}</label>
-        <label className="field full"><span>Notes</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Reservation details, reminders, what to order…" rows="3" /></label>
-        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button">Save stop <Check size={16} /></button></div>
+        <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
+        <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
+        <label className="field full"><span>場所</span><div className="field-with-button"><input value={form.location} onChange={(e) => set('location', e.target.value)} placeholder="場所を検索、または住所を貼り付け" /><button type="button" onClick={lookup} disabled={!apiKey || searching} aria-label="場所を地図で検索">{searching ? '…' : <LocateFixed size={17} />}</button></div>{form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}</label>
+        <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
+        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存 <Check size={16} /></button></div>
       </form>
     </Modal>
   );
@@ -456,13 +457,13 @@ function TripForm({ onSave, onClose }) {
   const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#FF5722' });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
-    <Modal title="Start a new journey" eyebrow="Fresh page" onClose={onClose}>
+    <Modal title="新しい旅行を作成" eyebrow="新規プラン" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title && form.startDate) onSave(form); }}>
-        <label className="field full"><span>Trip name</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="A long weekend in Kyoto" /></label>
-        <label className="field full"><span>Small description</span><input value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)} placeholder="Temples, morning walks, one perfect meal" /></label>
-        <label className="field"><span>Starts</span><input required type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></label>
-        <label className="field"><span>Ends</span><input required type="date" min={form.startDate} value={form.endDate} onChange={(e) => set('endDate', e.target.value)} /></label>
-        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button">Create trip <ArrowLeft size={16} /></button></div>
+        <label className="field full"><span>旅行名</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="例：京都で過ごす週末" /></label>
+        <label className="field full"><span>旅行の説明</span><input value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)} placeholder="例：お寺、朝の散歩、とっておきの食事" /></label>
+        <label className="field"><span>開始日</span><input required type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></label>
+        <label className="field"><span>終了日</span><input required type="date" min={form.startDate} value={form.endDate} onChange={(e) => set('endDate', e.target.value)} /></label>
+        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">旅行を作成 <ArrowLeft size={16} /></button></div>
       </form>
     </Modal>
   );
@@ -471,13 +472,13 @@ function TripForm({ onSave, onClose }) {
 function DayForm({ day, onSave, onAddDay, onClose }) {
   const [form, setForm] = useState(day);
   return (
-    <Modal title="Shape the day" eyebrow={formatDay(day.date)} onClose={onClose}>
+    <Modal title="この日の予定を編集" eyebrow={formatDay(day.date)} onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
-        <label className="field full"><span>Day title</span><input autoFocus required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
-        <label className="field full"><span>Date</span><input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-        <label className="field full"><span>Day note</span><textarea rows="3" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="The pace, a reminder, or the one thing that matters…" /></label>
-        <button type="button" className="text-button full" onClick={onAddDay}><Plus size={16} /> Add another day after this one</button>
-        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button">Save day <Check size={16} /></button></div>
+        <label className="field full"><span>この日のタイトル</span><input autoFocus required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+        <label className="field full"><span>日付</span><input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+        <label className="field full"><span>この日のメモ</span><textarea rows="3" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="過ごし方、注意事項、大切にしたいことなど" /></label>
+        <button type="button" className="text-button full" onClick={onAddDay}><Plus size={16} /> この日の後に1日追加</button>
+        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">この日を保存 <Check size={16} /></button></div>
       </form>
     </Modal>
   );
@@ -486,10 +487,10 @@ function DayForm({ day, onSave, onAddDay, onClose }) {
 function SettingsModal({ apiKey, setApiKey, onClose }) {
   const [value, setValue] = useState(apiKey);
   return (
-    <Modal title="Connect Google Maps" eyebrow="Map settings" onClose={onClose}>
-      <div className="settings-copy"><p>Paste a Google Maps JavaScript API key to enable live maps, location search, and tap-to-pin.</p><p>The key stays in this browser. For a public website, restrict it to your GitHub Pages domain in Google Cloud.</p></div>
-      <label className="field full"><span>API key</span><input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="AIza…" /></label>
-      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => { setApiKey(value.trim()); onClose(); }}>Save key <KeyRound size={16} /></button></div>
+    <Modal title="Google Mapsを接続" eyebrow="地図の設定" onClose={onClose}>
+      <div className="settings-copy"><p>Google Maps JavaScript APIキーを入力すると、地図、場所検索、地図をタップして予定を追加する機能が使えます。</p><p>キーはこのブラウザに保存されます。公開サイトでは、Google CloudでGitHub Pagesのドメインに利用を制限してください。</p></div>
+      <label className="field full"><span>APIキー</span><input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="AIza…" /></label>
+      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setApiKey(value.trim()); onClose(); }}>キーを保存 <KeyRound size={16} /></button></div>
     </Modal>
   );
 }
@@ -522,7 +523,7 @@ function App() {
     setModal(null);
   };
   const createTrip = (form) => {
-    const firstDay = { id: uid(), date: form.startDate, title: 'Arrival & first impressions', note: 'Keep space for the unexpected.', activities: [] };
+    const firstDay = { id: uid(), date: form.startDate, title: '到着・最初の一日', note: '予定を詰めすぎず、余白を残しておきましょう。', activities: [] };
     const newTrip = { ...form, id: uid(), endDate: form.endDate || form.startDate, days: [firstDay] };
     setTrips((current) => [...current, newTrip]);
     setSelectedId(newTrip.id);
@@ -530,7 +531,7 @@ function App() {
     setModal(null);
   };
   const deleteTrip = (id) => {
-    if (!confirm('Delete this trip from this browser?')) return;
+    if (!confirm('この旅行を削除しますか？')) return;
     const remaining = trips.filter((item) => item.id !== id);
     setTrips(remaining);
     if (id === selectedId) { setSelectedId(remaining[0]?.id); setDayIndex(0); }
@@ -538,7 +539,7 @@ function App() {
   const addDay = () => {
     const currentDate = new Date(`${day.date}T12:00:00`);
     currentDate.setDate(currentDate.getDate() + 1);
-    const newDay = { id: uid(), date: currentDate.toISOString().slice(0, 10), title: 'A new day', note: '', activities: [] };
+    const newDay = { id: uid(), date: currentDate.toISOString().slice(0, 10), title: '新しい一日', note: '', activities: [] };
     updateTrip((current) => { const days = [...current.days]; days.splice(dayIndex + 1, 0, newDay); return { ...current, days }; });
     setDayIndex(dayIndex + 1);
     setModal({ type: 'day', day: newDay });
@@ -580,29 +581,29 @@ function App() {
     );
   }
 
-  if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>Restore Iceland trip</button></div>;
+  if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
 
   return (
     <main className="app-shell">
       <TripRail trips={trips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
-      {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="Close trips" />}
+      {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="旅行一覧を閉じる" />}
       <section className="map-stage">
         <header className="topbar">
-          <button className="icon-button mobile-menu" onClick={() => setRailOpen(true)}><Menu size={20} /></button>
+          <button className="icon-button mobile-menu" onClick={() => setRailOpen(true)} aria-label="旅行一覧を開く"><Menu size={20} /></button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
           <div className="itinerary-view-switch"><ViewSwitch view={view} onChange={setView} /></div>
-          <button className="icon-button" onClick={() => setModal({ type: 'settings' })}><Settings size={19} /></button>
+          <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
         <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
-        <div className="map-hint"><MapPin size={14} /> Tap the map to add a stop</div>
+        <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
       </section>
       <ItinerarySheet trip={trip} day={day} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onEditDay={() => setModal({ type: 'day', day })} />
-      <nav className="mobile-nav" aria-label="Quick actions">
-        <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>Trips</span></button>
-        <button className="nav-add" aria-label="Add a stop" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
-        <button onClick={() => setView('plan')}><FilePlus2 size={19} /><span>Plan</span></button>
+      <nav className="mobile-nav" aria-label="クイック操作">
+        <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
+        <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
+        <button onClick={() => setView('plan')}><FilePlus2 size={19} /><span>プラン</span></button>
       </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
