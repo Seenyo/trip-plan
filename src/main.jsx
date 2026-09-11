@@ -89,6 +89,25 @@ function useStoredState(key, initialValue) {
   return [value, setValue];
 }
 
+function createStopMarker(maps, map, position, number, title) {
+  const marker = new maps.OverlayView();
+  const node = document.createElement('div');
+  node.className = 'map-stop-marker';
+  node.textContent = String(number);
+  node.setAttribute('role', 'img');
+  node.setAttribute('aria-label', `${number}. ${title || '場所'}`);
+  marker.onAdd = () => marker.getPanes().overlayLayer.appendChild(node);
+  marker.draw = () => {
+    const point = marker.getProjection().fromLatLngToDivPixel(new maps.LatLng(position));
+    if (!point) return;
+    node.style.left = `${point.x}px`;
+    node.style.top = `${point.y}px`;
+  };
+  marker.onRemove = () => node.remove();
+  marker.setMap(map);
+  return marker;
+}
+
 function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
@@ -156,13 +175,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
     const bounds = new window.google.maps.LatLngBounds();
     if (connectPreviousDay) bounds.extend(previousPoint);
     mappedStops.forEach(({ item, index }) => {
-      const marker = new window.google.maps.Marker({
-        position: item.coords,
-        map: mapRef.current,
-        label: { text: `${index + 1}`, color: '#303841', fontWeight: '700' },
-        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: '#F5F5F5', fillOpacity: 1, strokeColor: '#FF5722', strokeWeight: 3 },
-        zIndex: 5,
-      });
+      const marker = createStopMarker(window.google.maps, mapRef.current, item.coords, index + 1, item.title);
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
@@ -287,21 +300,27 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
 function SearchBar({ apiKey, onResult, onRequestKey }) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const search = async (event) => {
     event.preventDefault();
     if (!apiKey || !window.google?.maps) return onRequestKey();
     if (!query.trim()) return;
+    setSearchError('');
     setSearching(true);
     try {
       const result = await new window.google.maps.Geocoder().geocode({ address: query });
       const place = result.results?.[0];
       if (place) onResult({ location: place.formatted_address, coords: { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() } });
+      if (!place) setSearchError('場所が見つかりません。検索語を変えてください。');
+    } catch {
+      setSearchError('場所を検索できませんでした。検索語や接続を確認して再試行してください。');
     } finally {
       setSearching(false);
     }
   };
   return (
     <form className="map-search" onSubmit={search}>
+      {searchError && <span className="search-error" role="alert">{searchError}</span>}
       <Search size={18} />
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="場所を検索" aria-label="場所を検索" />
       {query && <button type="button" className="clear-search" onClick={() => setQuery('')} aria-label="検索内容を消去"><X size={15} /></button>}
@@ -411,7 +430,7 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose,
         ))}
       </div>
       <button className="new-trip-button" onClick={onAdd}><CirclePlus size={19} /> 新しい旅行を作成</button>
-      <div className="rail-foot"><span>{syncStatus === 'error' ? 'このブラウザに保存' : '共有ワークスペース'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? '同期中' : syncStatus === 'error' ? 'ローカル' : '同期済み'}</span></div>
+      <div className="rail-foot"><span>{['error', 'local'].includes(syncStatus) ? 'このブラウザに保存' : '共有ワークスペース'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? '同期中' : syncStatus === 'loading' ? '読み込み中' : ['error', 'local'].includes(syncStatus) ? 'ローカル' : '同期済み'}</span></div>
     </aside>
   );
 }
@@ -430,22 +449,28 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
 function ActivityForm({ initial, onSave, onClose, apiKey }) {
   const [form, setForm] = useState(initial || { time: '10:00', title: '', location: '', notes: '', coords: null });
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   const lookup = async () => {
     if (!apiKey || !window.google?.maps || !form.location.trim()) return;
+    setSearchError('');
     setSearching(true);
     try {
       const result = await new window.google.maps.Geocoder().geocode({ address: form.location });
       const place = result.results?.[0];
       if (place) setForm((current) => ({ ...current, location: place.formatted_address, coords: { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() } }));
+      if (!place) setSearchError('場所が見つかりません。検索語を変えてください。');
+    } catch {
+      setSearchError('場所を検索できませんでした。検索語や接続を確認して再試行してください。');
     } finally { setSearching(false); }
   };
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title.trim()) onSave({ ...form, id: form.id || uid() }); }}>
+        {searchError && <p className="full" role="alert">{searchError}</p>}
         <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
         <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
-        <label className="field full"><span>場所</span><div className="field-with-button"><input value={form.location} onChange={(e) => set('location', e.target.value)} placeholder="場所を検索、または住所を貼り付け" /><button type="button" onClick={lookup} disabled={!apiKey || searching} aria-label="場所を地図で検索">{searching ? '…' : <LocateFixed size={17} />}</button></div>{form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}</label>
+        <label className="field full"><span>場所</span><div className="field-with-button"><input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value, coords: null }))} placeholder="場所を検索、または住所を貼り付け" /><button type="button" onClick={lookup} disabled={!apiKey || searching} aria-label="場所を地図で検索">{searching ? '…' : <LocateFixed size={17} />}</button></div>{form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}</label>
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
         <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存 <Check size={16} /></button></div>
       </form>
