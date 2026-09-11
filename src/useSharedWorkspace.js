@@ -21,8 +21,14 @@ export function useSharedWorkspace(initialTrips) {
   const [ready, setReady] = useState(!isSupabaseConfigured);
   const revisionRef = useRef(0);
   const mountedRef = useRef(true);
+  const savedSnapshotRef = useRef(null);
+  const saveQueueRef = useRef(Promise.resolve());
+  const pendingWritesRef = useRef(0);
 
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -30,10 +36,13 @@ export function useSharedWorkspace(initialTrips) {
     const load = async () => {
       try {
         const remote = await loadSharedWorkspace();
-        if (cancelled || !remote) return;
+        if (cancelled) return;
+        if (!remote) throw new Error('共有ワークスペースが見つかりません。');
         revisionRef.current = remote.revision || 0;
         const remoteTrips = Array.isArray(remote.trips) && remote.trips.length ? remote.trips : trips;
         const remotePlan = Array.isArray(remote.plan_document) ? remote.plan_document : planDocument;
+        // Only the remote payload is saved; local fallback seeds still need a write.
+        savedSnapshotRef.current = JSON.stringify([remote.trips, remote.plan_document, remote.plan_markdown || '']);
         setTrips(remoteTrips);
         setPlanDocument(remotePlan);
         setPlanMarkdown(remote.plan_markdown || '');
@@ -42,7 +51,8 @@ export function useSharedWorkspace(initialTrips) {
       } catch (error) {
         console.warn('Supabase workspace could not be loaded. Using this browser instead.', error);
         if (!cancelled) {
-          setReady(true);
+          // Never write the local fallback over a workspace we could not read.
+          setReady(false);
           setSyncStatus('error');
         }
       }
@@ -63,23 +73,37 @@ export function useSharedWorkspace(initialTrips) {
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return undefined;
+    const snapshot = JSON.stringify([trips, planDocument, planMarkdown]);
+    if (snapshot === savedSnapshotRef.current && pendingWritesRef.current === 0) {
+      setSyncStatus('saved');
+      return undefined;
+    }
+    let cancelled = false;
     setSyncStatus('saving');
-    const timer = window.setTimeout(async () => {
-      try {
-        const saved = await saveSharedWorkspace({
-          trips,
-          planDocument,
-          planMarkdown,
-          revision: revisionRef.current,
-        });
-        revisionRef.current = saved?.revision || revisionRef.current + 1;
-        if (mountedRef.current) setSyncStatus('saved');
-      } catch (error) {
-        console.warn('Supabase workspace could not be saved.', error);
-        if (mountedRef.current) setSyncStatus('error');
-      }
+    const timer = window.setTimeout(() => {
+      // Serialize writes so an older request cannot finish after a newer edit.
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        if (cancelled) return;
+        pendingWritesRef.current += 1;
+        try {
+          const saved = await saveSharedWorkspace({
+            trips,
+            planDocument,
+            planMarkdown,
+            revision: revisionRef.current,
+          });
+          revisionRef.current = saved?.revision || revisionRef.current + 1;
+          savedSnapshotRef.current = snapshot;
+          if (mountedRef.current && !cancelled) setSyncStatus('saved');
+        } catch (error) {
+          console.warn('Supabase workspace could not be saved.', error);
+          if (mountedRef.current && !cancelled) setSyncStatus('error');
+        } finally {
+          pendingWritesRef.current -= 1;
+        }
+      });
     }, 700);
-    return () => window.clearTimeout(timer);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [ready, trips, planDocument, planMarkdown]);
 
   const updatePlan = (document, markdown = '') => {
