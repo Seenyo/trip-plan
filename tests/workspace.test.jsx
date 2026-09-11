@@ -89,3 +89,15 @@ it('returns to saved when an edit is reverted before the debounce expires', asyn
   expect(saveSharedWorkspace).not.toHaveBeenCalled();
   expect(result.current.syncStatus).toBe('saved');
 });
+
+it('persists local seed trips when the remote workspace has migration defaults', async () => {
+  loadSharedWorkspace.mockResolvedValue({ ...remote, trips: [], revision: 1 });
+  const { result } = await mount();
+  expect(result.current.syncStatus).toBe('saving');
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(saveSharedWorkspace).toHaveBeenCalledTimes(1);
+  expect(saveSharedWorkspace).toHaveBeenCalledWith({
+    trips: [{ id: 'local' }], planDocument: [], planMarkdown: '', revision: 1,
+  });
+  expect(result.current.syncStatus).toBe('saved');
+});

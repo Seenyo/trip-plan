@@ -41,7 +41,8 @@ export function useSharedWorkspace(initialTrips) {
         revisionRef.current = remote.revision || 0;
         const remoteTrips = Array.isArray(remote.trips) && remote.trips.length ? remote.trips : trips;
         const remotePlan = Array.isArray(remote.plan_document) ? remote.plan_document : planDocument;
-        savedSnapshotRef.current = JSON.stringify([remoteTrips, remotePlan, remote.plan_markdown || '']);
+        // Only the remote payload is saved; local fallback seeds still need a write.
+        savedSnapshotRef.current = JSON.stringify([remote.trips, remote.plan_document, remote.plan_markdown || '']);
         setTrips(remoteTrips);
         setPlanDocument(remotePlan);
         setPlanMarkdown(remote.plan_markdown || '');
