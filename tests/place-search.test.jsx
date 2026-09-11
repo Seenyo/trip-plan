@@ -40,3 +40,33 @@ it('handles failed searches without submitting the enclosing activity form', asy
   expect(screen.getByRole('alert')).toBeTruthy();
   expect(submit).not.toHaveBeenCalled();
 });
+it('waits for Maps to load without opening key settings, then searches the latest query', async () => {
+  const maps = window.google;
+  delete window.google;
+  const onRequestKey = vi.fn();
+  const props = { onChange: () => {}, onSelect: vi.fn(), apiKey: 'test', onRequestKey };
+  const view = render(<PlaceSearch {...props} value="" />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Reyk' } });
+  view.rerender(<PlaceSearch {...props} value="Reyk" />);
+  await act(() => vi.advanceTimersByTimeAsync(800));
+  expect(onRequestKey).not.toHaveBeenCalled();
+  expect(geocode).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alert')).toBeNull();
+  geocode.mockResolvedValue({ results: [place('Reykjavík')] });
+  act(() => { window.google = maps; window.dispatchEvent(new Event('roam-maps-ready')); });
+  await act(() => vi.advanceTimersByTimeAsync(400));
+  expect(geocode).toHaveBeenCalledWith({ address: 'Reyk' });
+  expect(screen.getByRole('button', { name: 'Reykjavík' })).toBeTruthy();
+});
+it('only opens missing-key settings for an explicit search', async () => {
+  delete window.google;
+  const onRequestKey = vi.fn();
+  const props = { onChange: () => {}, onSelect: vi.fn(), apiKey: '', onRequestKey };
+  const view = render(<PlaceSearch {...props} value="" />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Reyk' } });
+  view.rerender(<PlaceSearch {...props} value="Reyk" />);
+  await act(() => vi.advanceTimersByTimeAsync(800));
+  expect(onRequestKey).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '場所を検索' }));
+  expect(onRequestKey).toHaveBeenCalledTimes(1);
+});

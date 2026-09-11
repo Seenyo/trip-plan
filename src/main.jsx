@@ -116,15 +116,22 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
-    window.__roamGoogleReady = () => setMapStatus('ready');
-    window.gm_authFailure = () => setMapStatus('error');
+    window.__roamGoogleReady = () => {
+      setMapStatus('ready');
+      window.dispatchEvent(new Event('roam-maps-ready'));
+    };
+    const mapsFailed = () => {
+      setMapStatus('error');
+      window.dispatchEvent(new Event('roam-maps-error'));
+    };
+    window.gm_authFailure = mapsFailed;
     const existing = document.querySelector('script[data-roam-maps]');
     if (existing) return;
     const script = document.createElement('script');
     script.dataset.roamMaps = 'true';
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&loading=async&v=weekly&language=ja&region=JP`;
     script.async = true;
-    script.onerror = () => setMapStatus('error');
+    script.onerror = mapsFailed;
     document.head.appendChild(script);
   }, [apiKey]);
 
