@@ -9,13 +9,11 @@ import {
   CirclePlus,
   FilePlus2,
   KeyRound,
-  LocateFixed,
   MapPin,
   Menu,
   Navigation,
   Pencil,
   Plus,
-  Search,
   Settings,
   Sparkles,
   Trash2,
@@ -25,6 +23,7 @@ import { domesticTrip } from './domesticTrip';
 import { icelandTrip } from './icelandTrip';
 import { useSharedWorkspace } from './useSharedWorkspace';
 import './styles.css';
+import PlaceSearch from './PlaceSearch';
 
 const PlanWorkspace = lazy(() => import('./PlanWorkspace'));
 
@@ -117,15 +116,22 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
-    window.__roamGoogleReady = () => setMapStatus('ready');
-    window.gm_authFailure = () => setMapStatus('error');
+    window.__roamGoogleReady = () => {
+      setMapStatus('ready');
+      window.dispatchEvent(new Event('roam-maps-ready'));
+    };
+    const mapsFailed = () => {
+      setMapStatus('error');
+      window.dispatchEvent(new Event('roam-maps-error'));
+    };
+    window.gm_authFailure = mapsFailed;
     const existing = document.querySelector('script[data-roam-maps]');
     if (existing) return;
     const script = document.createElement('script');
     script.dataset.roamMaps = 'true';
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__roamGoogleReady&loading=async&v=weekly&language=ja&region=JP`;
     script.async = true;
-    script.onerror = () => setMapStatus('error');
+    script.onerror = mapsFailed;
     document.head.appendChild(script);
   }, [apiKey]);
 
@@ -299,34 +305,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey }) {
 
 function SearchBar({ apiKey, onResult, onRequestKey }) {
   const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const search = async (event) => {
-    event.preventDefault();
-    if (!apiKey || !window.google?.maps) return onRequestKey();
-    if (!query.trim()) return;
-    setSearchError('');
-    setSearching(true);
-    try {
-      const result = await new window.google.maps.Geocoder().geocode({ address: query });
-      const place = result.results?.[0];
-      if (place) onResult({ location: place.formatted_address, coords: { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() } });
-      if (!place) setSearchError('場所が見つかりません。検索語を変えてください。');
-    } catch {
-      setSearchError('場所を検索できませんでした。検索語や接続を確認して再試行してください。');
-    } finally {
-      setSearching(false);
-    }
-  };
-  return (
-    <form className="map-search" onSubmit={search}>
-      {searchError && <span className="search-error" role="alert">{searchError}</span>}
-      <Search size={18} />
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="場所を検索" aria-label="場所を検索" />
-      {query && <button type="button" className="clear-search" onClick={() => setQuery('')} aria-label="検索内容を消去"><X size={15} /></button>}
-      <button className="search-submit" aria-label="検索" disabled={searching}>{searching ? '…' : <ArrowLeft size={16} />}</button>
-    </form>
-  );
+  return <PlaceSearch variant="map" value={query} onChange={setQuery} apiKey={apiKey}
+    onRequestKey={onRequestKey} onSelect={(place) => { setQuery(place.location); onResult(place); }} />;
 }
 
 function DayStrip({ trip, dayIndex, setDayIndex }) {
@@ -448,29 +428,18 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
 
 function ActivityForm({ initial, onSave, onClose, apiKey }) {
   const [form, setForm] = useState(initial || { time: '10:00', title: '', location: '', notes: '', coords: null });
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
-  const lookup = async () => {
-    if (!apiKey || !window.google?.maps || !form.location.trim()) return;
-    setSearchError('');
-    setSearching(true);
-    try {
-      const result = await new window.google.maps.Geocoder().geocode({ address: form.location });
-      const place = result.results?.[0];
-      if (place) setForm((current) => ({ ...current, location: place.formatted_address, coords: { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() } }));
-      if (!place) setSearchError('場所が見つかりません。検索語を変えてください。');
-    } catch {
-      setSearchError('場所を検索できませんでした。検索語や接続を確認して再試行してください。');
-    } finally { setSearching(false); }
-  };
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title.trim()) onSave({ ...form, id: form.id || uid() }); }}>
-        {searchError && <p className="full" role="alert">{searchError}</p>}
         <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
         <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
-        <label className="field full"><span>場所</span><div className="field-with-button"><input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value, coords: null }))} placeholder="場所を検索、または住所を貼り付け" /><button type="button" onClick={lookup} disabled={!apiKey || searching} aria-label="場所を地図で検索">{searching ? '…' : <LocateFixed size={17} />}</button></div>{form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}</label>
+        <div className="field full"><span>場所</span>
+          <PlaceSearch value={form.location} apiKey={apiKey}
+            onChange={(location) => setForm((current) => ({ ...current, location, coords: null }))}
+            onSelect={(place) => setForm((current) => ({ ...current, ...place }))} />
+          {form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}
+        </div>
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
         <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存 <Check size={16} /></button></div>
       </form>
