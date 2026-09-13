@@ -270,7 +270,15 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
             })();
             routeCache.current = { key: routeKey, promise: cachedRoute };
           }
-          const { drivingRoutes, fallbackDestinationIndexes } = await cachedRoute;
+          let routeResult;
+          try {
+            routeResult = await cachedRoute;
+          } catch (error) {
+            if (routeCache.current?.promise === cachedRoute) routeCache.current = null;
+            throw error;
+          }
+          const { drivingRoutes, fallbackDestinationIndexes } = routeResult;
+          if (!drivingRoutes.length && routeCache.current?.promise === cachedRoute) routeCache.current = null;
           if (cancelled) return;
           if (!drivingRoutes.length) throw new Error('車のルートが見つかりませんでした');
           const travelTimes = {};
