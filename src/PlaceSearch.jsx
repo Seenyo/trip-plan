@@ -3,6 +3,24 @@ import { LoaderCircle, MapPin, Search } from 'lucide-react';
 
 const browserLanguage = () => navigator.languages?.[0] || navigator.language || undefined;
 
+const autocompleteCandidate = (prediction) => ({
+  id: prediction.placeId,
+  mainText: prediction.mainText?.toString() || prediction.text.toString(),
+  secondaryText: prediction.secondaryText?.toString() || '',
+  resolve: async () => {
+    const place = prediction.toPlace();
+    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+    return place;
+  },
+});
+
+const textSearchCandidate = (place) => ({
+  id: place.id,
+  mainText: place.displayName || place.formattedAddress,
+  secondaryText: place.formattedAddress === place.displayName ? '' : place.formattedAddress,
+  resolve: async () => place,
+});
+
 export default function PlaceSearch({ value, onChange, onSelect, apiKey, onRequestKey, variant = 'field' }) {
   const [candidates, setCandidates] = useState([]);
   const [status, setStatus] = useState('idle');
@@ -34,7 +52,7 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
     setCandidates([]);
     setStatus('loading');
     try {
-      const { AutocompleteSessionToken, AutocompleteSuggestion } = await window.google.maps.importLibrary('places');
+      const { AutocompleteSessionToken, AutocompleteSuggestion, Place } = await window.google.maps.importLibrary('places');
       if (request.current !== id) return;
       sessionToken.current ||= new AutocompleteSessionToken();
       const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
@@ -43,9 +61,22 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
         sessionToken: sessionToken.current,
       });
       if (request.current !== id) return;
-      const predictions = (response.suggestions || []).map((item) => item.placePrediction).filter(Boolean);
-      setCandidates(predictions);
-      setStatus(predictions.length ? 'results' : 'empty');
+      let results = (response.suggestions || [])
+        .map((item) => item.placePrediction)
+        .filter(Boolean)
+        .map(autocompleteCandidate);
+      if (!results.length) {
+        const textResponse = await Place.searchByText({
+          textQuery: value.trim(),
+          fields: ['id', 'displayName', 'formattedAddress', 'location'],
+          language: browserLanguage(),
+          maxResultCount: 5,
+        });
+        if (request.current !== id) return;
+        results = (textResponse.places || []).filter((place) => place.location).map(textSearchCandidate);
+      }
+      setCandidates(results);
+      setStatus(results.length ? 'results' : 'empty');
     } catch (error) {
       if (request.current !== id) return;
       setStatus(error.code === 'ZERO_RESULTS' ? 'empty' : 'error');
@@ -67,19 +98,18 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
     onChange(next);
   };
 
-  const choose = async (prediction) => {
+  const choose = async (candidate) => {
     clearTimeout(debounce.current);
     const id = ++request.current;
     setStatus('loading');
     try {
-      const place = prediction.toPlace();
-      await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+      const place = await candidate.resolve();
       if (request.current !== id) return;
       if (!place.location) {
         setStatus('error');
         return;
       }
-      const location = place.formattedAddress || place.displayName || prediction.text.toString();
+      const location = place.formattedAddress || place.displayName || candidate.mainText;
       selectedValue.current = location;
       sessionToken.current = null;
       setCandidates([]);
@@ -120,11 +150,11 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
     {status !== 'idle' && <div className="place-candidates" id={listId}>
       {status === 'results' ? <>
         <p className="place-candidates-heading">候補から場所を選択</p>
-        <ul aria-label="場所の候補">{candidates.map((prediction, index) => <li key={prediction.placeId || index}>
-          <button type="button" onClick={() => choose(prediction)}>
+        <ul aria-label="場所の候補">{candidates.map((candidate, index) => <li key={candidate.id || index}>
+          <button type="button" onClick={() => choose(candidate)}>
             <MapPin size={17} aria-hidden="true" />
-            <span><strong>{prediction.mainText?.toString() || prediction.text.toString()}</strong>
-              {prediction.secondaryText && <small>{prediction.secondaryText.toString()}</small>}
+            <span><strong>{candidate.mainText}</strong>
+              {candidate.secondaryText && <small>{candidate.secondaryText}</small>}
             </span>
           </button>
         </li>)}</ul>

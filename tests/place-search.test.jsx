@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import PlaceSearch from '../src/PlaceSearch';
 const fetchSuggestions = vi.fn();
+const searchByText = vi.fn();
 const place = (name, address = name) => ({
   placeId: name,
   text: { toString: () => address },
@@ -19,8 +20,14 @@ const place = (name, address = name) => ({
 const mapsApi = () => ({ maps: { importLibrary: vi.fn().mockResolvedValue({
   AutocompleteSessionToken: class {},
   AutocompleteSuggestion: { fetchAutocompleteSuggestions: fetchSuggestions },
+  Place: { searchByText },
 }) } });
-beforeEach(() => { vi.useFakeTimers(); fetchSuggestions.mockReset(); window.google = mapsApi(); });
+beforeEach(() => {
+  vi.useFakeTimers();
+  fetchSuggestions.mockReset();
+  searchByText.mockReset();
+  window.google = mapsApi();
+});
 afterEach(() => { cleanup(); vi.useRealTimers(); delete window.google; });
 it('offers all results and only sets coordinates after the user selects one', async () => {
   fetchSuggestions.mockResolvedValue({ suggestions: [place('Reykjavík'), place('Reykjanes')].map((placePrediction) => ({ placePrediction })) });
@@ -33,11 +40,36 @@ it('offers all results and only sets coordinates after the user selects one', as
     sessionToken: expect.any(Object),
   }));
   expect(fetchSuggestions.mock.calls[0][0]).not.toHaveProperty('includedRegionCodes');
+  expect(searchByText).not.toHaveBeenCalled();
   expect(screen.getAllByRole('listitem')).toHaveLength(2);
   expect(onSelect).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Reykjanes' })));
   expect(onSelect).toHaveBeenCalledWith({ title: 'Reykjanes', location: 'Reykjanes', coords: { lat: 64, lng: -21 } });
   expect(screen.queryByRole('list')).toBeNull();
+});
+it('falls back to text search for localized place names that autocomplete does not match', async () => {
+  fetchSuggestions.mockResolvedValue({ suggestions: [] });
+  searchByText.mockResolvedValue({ places: [{
+    id: 'dettifoss',
+    displayName: 'Dettifoss',
+    formattedAddress: '671, Iceland',
+    location: { lat: () => 65.8147, lng: () => -16.3846 },
+  }] });
+  const onSelect = vi.fn();
+  render(<PlaceSearch value="デティフォス" onChange={() => {}} onSelect={onSelect} apiKey="test" />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '場所を検索' })));
+  expect(searchByText).toHaveBeenCalledWith({
+    textQuery: 'デティフォス',
+    fields: ['id', 'displayName', 'formattedAddress', 'location'],
+    language: expect.any(String),
+    maxResultCount: 5,
+  });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /Dettifoss/ })));
+  expect(onSelect).toHaveBeenCalledWith({
+    title: 'Dettifoss',
+    location: '671, Iceland',
+    coords: { lat: 65.8147, lng: -16.3846 },
+  });
 });
 it('leaves the loading state when a selected place has no coordinates', async () => {
   const prediction = place('Unknown place');
