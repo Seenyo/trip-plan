@@ -46,6 +46,7 @@ import {
   formatTravelDuration,
   reorderActivitiesIntoTimeSlots,
   routeColorForIndex,
+  routeTextColor,
   sortActivitiesByTime,
 } from './itineraryUtils';
 
@@ -107,7 +108,7 @@ function createStopMarker(maps, map, position, number, title, color) {
   node.className = 'map-stop-marker';
   node.textContent = String(number);
   node.style.backgroundColor = color;
-  node.style.color = color === '#ffad42' ? '#303841' : '#fff';
+  node.style.color = routeTextColor(color);
   node.setAttribute('role', 'img');
   node.setAttribute('aria-label', `${number}. ${title || '場所'}`);
   marker.onAdd = () => marker.getPanes().overlayLayer.appendChild(node);
@@ -126,6 +127,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
+  const routeCache = useRef(null);
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
   const [routeStatus, setRouteStatus] = useState('idle');
 
@@ -180,6 +182,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
     const routeStops = rawRouteStops.filter((stop, index) => index === 0
       || distanceKm(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
     const routePoints = routeStops.map((stop) => stop.coords);
+    const routeKey = JSON.stringify(routeStops.map((stop) => [stop.coords.lat, stop.coords.lng]));
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
       mapRef.current = new window.google.maps.Map(mapNode.current, {
@@ -230,38 +233,45 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
             polylineQuality: 'HIGH_QUALITY',
             fields: ['path', 'viewport', 'legs'],
           };
-          let routes = [];
-          try {
-            const result = await Route.computeRoutes(routeRequest);
-            routes = result.routes || [];
-          } catch {
-            routes = [];
-          }
-          if (cancelled) return;
-          let drivingRoutes = routes?.[0] ? [routes[0]] : [];
-          let fallbackDestinationIndexes = [];
-          if (!drivingRoutes.length) {
-            const legs = routePoints.slice(0, -1).map((origin, index) => ({ origin, destination: routePoints[index + 1] }));
-            const legResults = await Promise.all(legs.map(async ({ origin, destination }) => {
+          let cachedRoute = routeCache.current?.key === routeKey ? routeCache.current.promise : null;
+          if (!cachedRoute) {
+            cachedRoute = (async () => {
+              let routes = [];
               try {
-                const result = await Route.computeRoutes({
-                  origin,
-                  destination,
-                  travelMode: 'DRIVING',
-                  polylineQuality: 'HIGH_QUALITY',
-                  fields: ['path', 'durationMillis', 'distanceMeters'],
-                });
-                return result.routes?.[0] || null;
+                const result = await Route.computeRoutes(routeRequest);
+                routes = result.routes || [];
               } catch {
-                return null;
+                routes = [];
               }
-            }));
-            if (cancelled) return;
-            fallbackDestinationIndexes = legResults
-              .map((route, index) => route ? index + 1 : null)
-              .filter((index) => index !== null);
-            drivingRoutes = legResults.filter(Boolean);
+              let drivingRoutes = routes?.[0] ? [routes[0]] : [];
+              let fallbackDestinationIndexes = [];
+              if (!drivingRoutes.length) {
+                const legs = routePoints.slice(0, -1).map((origin, index) => ({ origin, destination: routePoints[index + 1] }));
+                const legResults = await Promise.all(legs.map(async ({ origin, destination }) => {
+                  try {
+                    const result = await Route.computeRoutes({
+                      origin,
+                      destination,
+                      travelMode: 'DRIVING',
+                      polylineQuality: 'HIGH_QUALITY',
+                      fields: ['path', 'durationMillis', 'distanceMeters'],
+                    });
+                    return result.routes?.[0] || null;
+                  } catch {
+                    return null;
+                  }
+                }));
+                fallbackDestinationIndexes = legResults
+                  .map((route, index) => route ? index + 1 : null)
+                  .filter((index) => index !== null);
+                drivingRoutes = legResults.filter(Boolean);
+              }
+              return { drivingRoutes, fallbackDestinationIndexes };
+            })();
+            routeCache.current = { key: routeKey, promise: cachedRoute };
           }
+          const { drivingRoutes, fallbackDestinationIndexes } = await cachedRoute;
+          if (cancelled) return;
           if (!drivingRoutes.length) throw new Error('車のルートが見つかりませんでした');
           const travelTimes = {};
           if (drivingRoutes.length === 1 && drivingRoutes[0].legs?.length) {
@@ -409,7 +419,7 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
       <div className="stop-track">
         <span className="stop-number" style={{
           backgroundColor: routeColorForIndex(index, varyRouteColors),
-          color: routeColorForIndex(index, varyRouteColors) === '#ffad42' ? '#303841' : '#fff',
+          color: routeTextColor(routeColorForIndex(index, varyRouteColors)),
         }}>{index + 1}</span>
         {index < count - 1 && <span className="stop-rule" />}
       </div>

@@ -3,7 +3,9 @@ import {
   formatTravelDistance,
   formatTravelDuration,
   reorderActivitiesIntoTimeSlots,
+  ROUTE_POINT_COLORS,
   routeColorForIndex,
+  routeTextColor,
   sortActivitiesByTime,
 } from '../src/itineraryUtils';
 
@@ -47,5 +49,20 @@ describe('itinerary helpers', () => {
     expect(routeColorForIndex(0, true)).toBe('#ffad42');
     expect(routeColorForIndex(1, true)).toBe('#4f9298');
     expect(routeColorForIndex(8, true)).toBe('#ffad42');
+  });
+
+  it('keeps stop numbers readable across the route palette', () => {
+    const luminance = (hexColor) => hexColor.match(/[\da-f]{2}/gi).map((channel) => {
+      const value = Number.parseInt(channel, 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    }).reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const contrast = (first, second) => {
+      const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
+      return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+
+    ROUTE_POINT_COLORS.forEach((color) => {
+      expect(contrast(color, routeTextColor(color))).toBeGreaterThanOrEqual(4.5);
+    });
   });
 });
