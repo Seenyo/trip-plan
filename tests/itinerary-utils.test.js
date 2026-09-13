@@ -7,6 +7,7 @@ import {
   routeColorForIndex,
   routeTextColor,
   sortActivitiesByTime,
+  travelModeForActivity,
 } from '../src/itineraryUtils';
 
 describe('itinerary helpers', () => {
@@ -24,6 +25,12 @@ describe('itinerary helpers', () => {
     expect(formatTravelDuration(95 * 60_000)).toBe('1時間35分');
     expect(formatTravelDistance(850)).toBe('850 m');
     expect(formatTravelDistance(12_400)).toBe('12 km');
+  });
+
+  it('defaults travel to driving and preserves an explicit walking choice', () => {
+    expect(travelModeForActivity({})).toBe('DRIVING');
+    expect(travelModeForActivity({ travelMode: 'DRIVING' })).toBe('DRIVING');
+    expect(travelModeForActivity({ travelMode: 'WALKING' })).toBe('WALKING');
   });
 
   it('moves activities through the existing chronological time slots', () => {
@@ -47,8 +54,9 @@ describe('itinerary helpers', () => {
     expect(routeColorForIndex(0)).toBe('#ffad42');
     expect(routeColorForIndex(4)).toBe('#ffad42');
     expect(routeColorForIndex(0, true)).toBe('#ffad42');
-    expect(routeColorForIndex(1, true)).toBe('#4f9298');
+    expect(routeColorForIndex(1, true)).toBe('#71c3c9');
     expect(routeColorForIndex(8, true)).toBe('#ffad42');
+    expect(routeTextColor(routeColorForIndex(0))).toBe('#303841');
   });
 
   it('keeps stop numbers readable across the route palette', () => {

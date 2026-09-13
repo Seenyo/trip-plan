@@ -29,6 +29,8 @@ import {
   Navigation,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Plus,
   Settings,
@@ -48,6 +50,7 @@ import {
   routeColorForIndex,
   routeTextColor,
   sortActivitiesByTime,
+  travelModeForActivity,
 } from './itineraryUtils';
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -170,19 +173,25 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
     let cancelled = false;
     const mappedStops = day.activities.map((item, index) => ({ item, index })).filter(({ item }) => item.coords);
     const points = mappedStops.map(({ item }) => item.coords);
-    const drivableStops = mappedStops.filter(({ item }) => item.route !== false)
-      .map(({ item, index }) => ({ id: item.id, coords: item.coords, activityIndex: index, fromPreviousDay: false }));
+    const routeableStops = mappedStops.filter(({ item }) => item.route !== false)
+      .map(({ item, index }) => ({
+        id: item.id,
+        coords: item.coords,
+        activityIndex: index,
+        fromPreviousDay: false,
+        travelMode: travelModeForActivity(item),
+      }));
     const previousActivity = previousDay?.activities.filter((item) => item.coords && item.route !== false).at(-1);
     const previousPoint = previousActivity?.coords;
     const connectPreviousDay = day.drivingFromPrevious !== false
-      && previousPoint && drivableStops[0] && distanceKm(previousPoint, drivableStops[0].coords) < 900;
+      && previousPoint && routeableStops[0] && distanceKm(previousPoint, routeableStops[0].coords) < 900;
     const rawRouteStops = connectPreviousDay
-      ? [{ id: null, coords: previousPoint, activityIndex: -1, fromPreviousDay: true }, ...drivableStops]
-      : drivableStops;
+      ? [{ id: null, coords: previousPoint, activityIndex: -1, fromPreviousDay: true, travelMode: null }, ...routeableStops]
+      : routeableStops;
     const routeStops = rawRouteStops.filter((stop, index) => index === 0
       || distanceKm(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
     const routePoints = routeStops.map((stop) => stop.coords);
-    const routeKey = JSON.stringify(routeStops.map((stop) => [stop.coords.lat, stop.coords.lng]));
+    const routeKey = JSON.stringify(routeStops.map((stop) => [stop.coords.lat, stop.coords.lng, stop.travelMode]));
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
       mapRef.current = new window.google.maps.Map(mapNode.current, {
@@ -225,11 +234,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
+          const legModes = routeStops.slice(1).map((stop) => stop.travelMode || 'DRIVING');
+          const singleTravelMode = legModes.every((mode) => mode === legModes[0]);
           const routeRequest = {
             origin: routePoints[0],
             destination: routePoints[routePoints.length - 1],
             intermediates: routePoints.slice(1, -1).map((location) => ({ location })),
-            travelMode: 'DRIVING',
+            travelMode: legModes[0] || 'DRIVING',
             polylineQuality: 'HIGH_QUALITY',
             fields: ['path', 'viewport', 'legs'],
           };
@@ -237,22 +248,28 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
           if (!cachedRoute) {
             cachedRoute = (async () => {
               let routes = [];
-              try {
-                const result = await Route.computeRoutes(routeRequest);
-                routes = result.routes || [];
-              } catch {
-                routes = [];
+              if (singleTravelMode) {
+                try {
+                  const result = await Route.computeRoutes(routeRequest);
+                  routes = result.routes || [];
+                } catch {
+                  routes = [];
+                }
               }
               let drivingRoutes = routes?.[0] ? [routes[0]] : [];
               let fallbackDestinationIndexes = [];
               if (!drivingRoutes.length) {
-                const legs = routePoints.slice(0, -1).map((origin, index) => ({ origin, destination: routePoints[index + 1] }));
-                const legResults = await Promise.all(legs.map(async ({ origin, destination }) => {
+                const legs = routePoints.slice(0, -1).map((origin, index) => ({
+                  origin,
+                  destination: routePoints[index + 1],
+                  travelMode: legModes[index] || 'DRIVING',
+                }));
+                const legResults = await Promise.all(legs.map(async ({ origin, destination, travelMode }) => {
                   try {
                     const result = await Route.computeRoutes({
                       origin,
                       destination,
-                      travelMode: 'DRIVING',
+                      travelMode,
                       polylineQuality: 'HIGH_QUALITY',
                       fields: ['path', 'durationMillis', 'distanceMeters'],
                     });
@@ -280,7 +297,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
           const { drivingRoutes, fallbackDestinationIndexes } = routeResult;
           if (!drivingRoutes.length && routeCache.current?.promise === cachedRoute) routeCache.current = null;
           if (cancelled) return;
-          if (!drivingRoutes.length) throw new Error('車のルートが見つかりませんでした');
+          if (!drivingRoutes.length) throw new Error('ルートが見つかりませんでした');
           const travelTimes = {};
           if (drivingRoutes.length === 1 && drivingRoutes[0].legs?.length) {
             drivingRoutes[0].legs.forEach((leg, index) => {
@@ -290,6 +307,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
                   durationMillis: leg.durationMillis,
                   distanceMeters: leg.distanceMeters,
                   fromPreviousDay: routeStops[index]?.fromPreviousDay || false,
+                  travelMode: destination.travelMode || 'DRIVING',
                 };
               }
             });
@@ -302,25 +320,34 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
                   durationMillis: route.durationMillis,
                   distanceMeters: route.distanceMeters,
                   fromPreviousDay: routeStops[destinationIndex - 1]?.fromPreviousDay || false,
+                  travelMode: destination.travelMode || 'DRIVING',
                 };
               }
             });
           }
           onTravelTimesChange(travelTimes);
-          const polylineOptions = (strokeColor) => ({ strokeColor, strokeOpacity: 0.9, strokeWeight: 5 });
+          const polylineOptions = (strokeColor, zIndex = 2) => ({ strokeColor, strokeOpacity: 1, strokeWeight: 5, zIndex });
+          const routeCasingOptions = { strokeColor: '#303841', strokeOpacity: 0.42, strokeWeight: 8, zIndex: 1 };
           const hasLegPaths = varyRouteColors && fallbackDestinationIndexes.length === 0
             && drivingRoutes.length === 1 && drivingRoutes[0].legs?.every((leg) => leg.path?.length);
           const routeLines = hasLegPaths
-            ? drivingRoutes[0].legs.map((leg, index) => new window.google.maps.Polyline({
-              path: leg.path,
-              ...polylineOptions(routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true)),
-            }))
+            ? drivingRoutes[0].legs.flatMap((leg, index) => {
+              const path = leg.path;
+              const color = routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true);
+              return [
+                new window.google.maps.Polyline({ path, ...routeCasingOptions }),
+                new window.google.maps.Polyline({ path, ...polylineOptions(color) }),
+              ];
+            })
             : drivingRoutes.flatMap((route, index) => {
               const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
               const activityIndex = routeStops[destinationIndex]?.activityIndex ?? destinationIndex;
-              return route.createPolylines({
+              const coloredLines = route.createPolylines({
                 polylineOptions: polylineOptions(routeColorForIndex(activityIndex, varyRouteColors)),
               });
+              if (!varyRouteColors) return coloredLines;
+              const casingLines = route.createPolylines({ polylineOptions: routeCasingOptions });
+              return [...casingLines, ...coloredLines];
             });
           routeLines.forEach((routeLine) => {
             routeLine.setMap(mapRef.current);
@@ -330,7 +357,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
           setRouteStatus('ready');
         } catch (error) {
           if (cancelled) return;
-          console.warn('車のルートを表示できませんでした。', error);
+          console.warn('ルートを表示できませんでした。', error);
           setRouteStatus('error');
         }
       };
@@ -385,8 +412,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
       <div className="google-map" ref={mapNode} />
       {mapStatus === 'loading' && <span className="map-loading">地図を読み込んでいます…</span>}
       {mapStatus === 'error' && accessCard(true)}
-      {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">車のルートを検索しています…</span>}
-      {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">車のルートを表示できません</span>}
+      {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">ルートを検索しています…</span>}
+      {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">ルートを表示できません</span>}
     </div>
   );
 }
@@ -432,12 +459,10 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         {index < count - 1 && <span className="stop-rule" />}
       </div>
       <div className="stop-copy">
-        {travelTime && <div className="travel-time">
-          <span><Navigation size={13} /> 車</span>
-          <strong>{formatTravelDuration(travelTime.durationMillis)}</strong>
+        {travelTime && <div className={`travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'}`}>
+          <strong>{travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}で{formatTravelDuration(travelTime.durationMillis)}</strong>
           {formatTravelDistance(travelTime.distanceMeters)
             && <small>· {formatTravelDistance(travelTime.distanceMeters)}</small>}
-          <em>{travelTime.fromPreviousDay ? '前の日から' : '前の予定から'}</em>
         </div>}
         <div className="stop-heading">
           {count > 1 && <button ref={setActivatorNodeRef} className="drag-handle" type="button"
@@ -576,7 +601,9 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
 }
 
 function ActivityForm({ initial, onSave, onClose, apiKey }) {
-  const [form, setForm] = useState(initial || { time: '10:00', title: '', location: '', notes: '', coords: null });
+  const [form, setForm] = useState({
+    time: '10:00', title: '', location: '', notes: '', coords: null, travelMode: 'DRIVING', ...initial,
+  });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={onClose}>
@@ -589,6 +616,20 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
             onSelect={({ location, coords }) => setForm((current) => ({ ...current, location, coords }))} />
           {form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}
         </div>
+        <fieldset className="field full travel-mode-field">
+          <legend>移動方法</legend>
+          <div className="travel-mode-options">
+            <label className={travelModeForActivity(form) === 'DRIVING' ? 'active' : ''}>
+              <input type="radio" name="travelMode" value="DRIVING" checked={travelModeForActivity(form) === 'DRIVING'} onChange={() => set('travelMode', 'DRIVING')} />
+              <span>車</span>
+            </label>
+            <label className={travelModeForActivity(form) === 'WALKING' ? 'active' : ''}>
+              <input type="radio" name="travelMode" value="WALKING" checked={travelModeForActivity(form) === 'WALKING'} onChange={() => set('travelMode', 'WALKING')} />
+              <span>徒歩</span>
+            </label>
+          </div>
+          <small>この予定までの移動方法を選べます</small>
+        </fieldset>
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
         <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存</button></div>
       </form>
@@ -655,6 +696,7 @@ function App() {
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(true);
   const [travelTimes, setTravelTimes] = useState({});
   const [modal, setModal] = useState(null);
   const trip = trips.find((item) => item.id === selectedId) || trips[0];
@@ -707,7 +749,7 @@ function App() {
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
 
   return (
-    <main className={`app-shell ${railOpen ? '' : 'rail-hidden'}`}>
+    <main className={`app-shell ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
       <TripRail trips={trips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
       {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="旅行一覧を閉じる" />}
       <section className="map-stage">
@@ -718,6 +760,10 @@ function App() {
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
+          <button className="icon-button timeline-toggle" onClick={() => setTimelineOpen((open) => !open)}
+            aria-label={timelineOpen ? '旅程を閉じる' : '旅程を開く'} title={timelineOpen ? '旅程を閉じる' : '旅程を開く'}>
+            {timelineOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+          </button>
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
         <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
