@@ -326,20 +326,28 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
             });
           }
           onTravelTimesChange(travelTimes);
-          const polylineOptions = (strokeColor) => ({ strokeColor, strokeOpacity: 0.9, strokeWeight: 5 });
+          const polylineOptions = (strokeColor, zIndex = 2) => ({ strokeColor, strokeOpacity: 1, strokeWeight: 5, zIndex });
+          const routeCasingOptions = { strokeColor: '#303841', strokeOpacity: 0.42, strokeWeight: 8, zIndex: 1 };
           const hasLegPaths = varyRouteColors && fallbackDestinationIndexes.length === 0
             && drivingRoutes.length === 1 && drivingRoutes[0].legs?.every((leg) => leg.path?.length);
           const routeLines = hasLegPaths
-            ? drivingRoutes[0].legs.map((leg, index) => new window.google.maps.Polyline({
-              path: leg.path,
-              ...polylineOptions(routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true)),
-            }))
+            ? drivingRoutes[0].legs.flatMap((leg, index) => {
+              const path = leg.path;
+              const color = routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true);
+              return [
+                new window.google.maps.Polyline({ path, ...routeCasingOptions }),
+                new window.google.maps.Polyline({ path, ...polylineOptions(color) }),
+              ];
+            })
             : drivingRoutes.flatMap((route, index) => {
               const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
               const activityIndex = routeStops[destinationIndex]?.activityIndex ?? destinationIndex;
-              return route.createPolylines({
+              const coloredLines = route.createPolylines({
                 polylineOptions: polylineOptions(routeColorForIndex(activityIndex, varyRouteColors)),
               });
+              if (!varyRouteColors) return coloredLines;
+              const casingLines = route.createPolylines({ polylineOptions: routeCasingOptions });
+              return [...casingLines, ...coloredLines];
             });
           routeLines.forEach((routeLine) => {
             routeLine.setMap(mapRef.current);
