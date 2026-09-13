@@ -33,8 +33,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .trip-rail::before, .trip-rail::after { display: none; }
 .rail-brand { display: flex; align-items: center; gap: 10px; font-family: 'Archivo Black', sans-serif; letter-spacing: .09em; font-size: 14px; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(245,245,245,.92); color: var(--orange); }
-.rail-close { width: 32px; height: 32px; margin-left: auto; display: grid; place-items: center; border: 0; border-radius: 9px; background: rgba(245,245,245,.08); color: white; cursor: pointer; }
-.rail-close:hover { background: rgba(245,245,245,.16); }
 .rail-heading { margin: 48px 2px 14px; display: flex; justify-content: space-between; align-items: center; color: rgba(245,245,245,.7); font: 700 9px 'Space Mono', monospace; text-transform: uppercase; letter-spacing: .09em; }
 .rail-heading button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--paper); background: rgba(118,171,174,.28); cursor: pointer; }
 .trip-list { display: grid; gap: 7px; overflow-y: auto; }
