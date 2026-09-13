@@ -47,8 +47,9 @@ describe('itinerary helpers', () => {
     expect(routeColorForIndex(0)).toBe('#ffad42');
     expect(routeColorForIndex(4)).toBe('#ffad42');
     expect(routeColorForIndex(0, true)).toBe('#ffad42');
-    expect(routeColorForIndex(1, true)).toBe('#4f9298');
+    expect(routeColorForIndex(1, true)).toBe('#71c3c9');
     expect(routeColorForIndex(8, true)).toBe('#ffad42');
+    expect(routeTextColor(routeColorForIndex(0))).toBe('#303841');
   });
 
   it('keeps stop numbers readable across the route palette', () => {

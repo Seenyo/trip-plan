@@ -19,8 +19,8 @@ export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) =
 
 export const DEFAULT_ROUTE_COLOR = '#ffad42';
 export const ROUTE_POINT_COLORS = [
-  '#ffad42', '#4f9298', '#d8624b', '#7568b5',
-  '#477daf', '#598961', '#a95c83', '#b47d2d',
+  '#ffad42', '#71c3c9', '#f47f68', '#a99ce3',
+  '#75aee0', '#82b98a', '#d68bac', '#d8a657',
 ];
 
 export const routeColorForIndex = (index, varyByPoint = false) => varyByPoint
@@ -43,7 +43,7 @@ const contrastRatio = (firstColor, secondColor) => {
 };
 
 export const routeTextColor = (backgroundColor) => {
-  const darkText = '#172027';
+  const darkText = '#303841';
   if (contrastRatio(backgroundColor, darkText) >= 4.5) return darkText;
   if (contrastRatio(backgroundColor, '#ffffff') >= 4.5) return '#ffffff';
   return '#000000';
