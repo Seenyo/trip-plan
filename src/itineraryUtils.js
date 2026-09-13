@@ -7,6 +7,16 @@ export const sortActivitiesByTime = (activities) => activities
   })
   .map(({ activity }) => activity);
 
+export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) => {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0
+    || fromIndex >= activities.length || toIndex >= activities.length) return activities;
+  const timeSlots = activities.map((activity) => activity.time);
+  const reordered = [...activities];
+  const [moved] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, moved);
+  return reordered.map((activity, index) => ({ ...activity, time: timeSlots[index] }));
+};
+
 export const formatTravelDuration = (durationMillis) => {
   const minutes = Math.max(1, Math.round(durationMillis / 60000));
   if (minutes < 60) return `${minutes}分`;
