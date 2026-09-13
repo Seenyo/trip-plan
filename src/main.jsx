@@ -453,7 +453,7 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose,
   const palette = ['#FF5722', '#76ABAE', '#F5F5F5'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
-      <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span><button className="rail-close" onClick={onClose} aria-label="旅行一覧を閉じる" title="旅行一覧を閉じる"><PanelLeftClose size={19} /></button></div>
+      <div className="rail-brand"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>ROAM</span></div>
       <div className="rail-heading"><span>旅行一覧</span><button onClick={onAdd} aria-label="旅行を追加"><Plus size={17} /></button></div>
       <div className="trip-list">
         {trips.map((trip, index) => (
