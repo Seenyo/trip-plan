@@ -39,6 +39,21 @@ it('offers all results and only sets coordinates after the user selects one', as
   expect(onSelect).toHaveBeenCalledWith({ title: 'Reykjanes', location: 'Reykjanes', coords: { lat: 64, lng: -21 } });
   expect(screen.queryByRole('list')).toBeNull();
 });
+it('leaves the loading state when a selected place has no coordinates', async () => {
+  const prediction = place('Unknown place');
+  prediction.toPlace = () => ({
+    displayName: 'Unknown place',
+    formattedAddress: 'Unknown place',
+    location: null,
+    fetchFields: vi.fn().mockResolvedValue(undefined),
+  });
+  fetchSuggestions.mockResolvedValue({ suggestions: [{ placePrediction: prediction }] });
+  render(<PlaceSearch value="Unknown" onChange={() => {}} onSelect={() => {}} apiKey="test" />);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '場所を検索' })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Unknown place' })));
+  expect(screen.getByRole('alert').textContent).toContain('検索できませんでした');
+  expect(screen.getByRole('button', { name: '場所を検索' }).disabled).toBe(false);
+});
 it('ignores old responses when the query changes', async () => {
   let resolveOld;
   fetchSuggestions.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));

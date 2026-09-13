@@ -74,7 +74,11 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
     try {
       const place = prediction.toPlace();
       await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
-      if (request.current !== id || !place.location) return;
+      if (request.current !== id) return;
+      if (!place.location) {
+        setStatus('error');
+        return;
+      }
       const location = place.formattedAddress || place.displayName || prediction.text.toString();
       selectedValue.current = location;
       sessionToken.current = null;
