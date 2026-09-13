@@ -17,6 +17,16 @@ export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) =
   return reordered.map((activity, index) => ({ ...activity, time: timeSlots[index] }));
 };
 
+export const DEFAULT_ROUTE_COLOR = '#ffad42';
+export const ROUTE_POINT_COLORS = [
+  '#ffad42', '#4f9298', '#d8624b', '#7568b5',
+  '#477daf', '#598961', '#a95c83', '#b47d2d',
+];
+
+export const routeColorForIndex = (index, varyByPoint = false) => varyByPoint
+  ? ROUTE_POINT_COLORS[index % ROUTE_POINT_COLORS.length]
+  : DEFAULT_ROUTE_COLOR;
+
 export const formatTravelDuration = (durationMillis) => {
   const minutes = Math.max(1, Math.round(durationMillis / 60000));
   if (minutes < 60) return `${minutes}分`;

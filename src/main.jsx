@@ -45,6 +45,7 @@ import {
   formatTravelDistance,
   formatTravelDuration,
   reorderActivitiesIntoTimeSlots,
+  routeColorForIndex,
   sortActivitiesByTime,
 } from './itineraryUtils';
 
@@ -100,11 +101,13 @@ function useStoredState(key, initialValue) {
   return [value, setValue];
 }
 
-function createStopMarker(maps, map, position, number, title) {
+function createStopMarker(maps, map, position, number, title, color) {
   const marker = new maps.OverlayView();
   const node = document.createElement('div');
   node.className = 'map-stop-marker';
   node.textContent = String(number);
+  node.style.backgroundColor = color;
+  node.style.color = color === '#ffad42' ? '#303841' : '#fff';
   node.setAttribute('role', 'img');
   node.setAttribute('aria-label', `${number}. ${title || '場所'}`);
   marker.onAdd = () => marker.getPanes().overlayLayer.appendChild(node);
@@ -119,7 +122,7 @@ function createStopMarker(maps, map, position, number, title) {
   return marker;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravelTimesChange }) {
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravelTimesChange, varyRouteColors }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -166,13 +169,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
     const mappedStops = day.activities.map((item, index) => ({ item, index })).filter(({ item }) => item.coords);
     const points = mappedStops.map(({ item }) => item.coords);
     const drivableStops = mappedStops.filter(({ item }) => item.route !== false)
-      .map(({ item }) => ({ id: item.id, coords: item.coords, fromPreviousDay: false }));
+      .map(({ item, index }) => ({ id: item.id, coords: item.coords, activityIndex: index, fromPreviousDay: false }));
     const previousActivity = previousDay?.activities.filter((item) => item.coords && item.route !== false).at(-1);
     const previousPoint = previousActivity?.coords;
     const connectPreviousDay = day.drivingFromPrevious !== false
       && previousPoint && drivableStops[0] && distanceKm(previousPoint, drivableStops[0].coords) < 900;
     const rawRouteStops = connectPreviousDay
-      ? [{ id: null, coords: previousPoint, fromPreviousDay: true }, ...drivableStops]
+      ? [{ id: null, coords: previousPoint, activityIndex: -1, fromPreviousDay: true }, ...drivableStops]
       : drivableStops;
     const routeStops = rawRouteStops.filter((stop, index) => index === 0
       || distanceKm(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
@@ -209,7 +212,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
     const bounds = new window.google.maps.LatLngBounds();
     if (connectPreviousDay) bounds.extend(previousPoint);
     mappedStops.forEach(({ item, index }) => {
-      const marker = createStopMarker(window.google.maps, mapRef.current, item.coords, index + 1, item.title);
+      const color = routeColorForIndex(index, varyRouteColors);
+      const marker = createStopMarker(window.google.maps, mapRef.current, item.coords, index + 1, item.title, color);
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
@@ -285,13 +289,21 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
             });
           }
           onTravelTimesChange(travelTimes);
-          const routeLines = drivingRoutes.flatMap((route) => route.createPolylines({
-            polylineOptions: {
-              strokeColor: '#ffad42',
-              strokeOpacity: 0.9,
-              strokeWeight: 5,
-            },
-          }));
+          const polylineOptions = (strokeColor) => ({ strokeColor, strokeOpacity: 0.9, strokeWeight: 5 });
+          const hasLegPaths = varyRouteColors && fallbackDestinationIndexes.length === 0
+            && drivingRoutes.length === 1 && drivingRoutes[0].legs?.every((leg) => leg.path?.length);
+          const routeLines = hasLegPaths
+            ? drivingRoutes[0].legs.map((leg, index) => new window.google.maps.Polyline({
+              path: leg.path,
+              ...polylineOptions(routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true)),
+            }))
+            : drivingRoutes.flatMap((route, index) => {
+              const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
+              const activityIndex = routeStops[destinationIndex]?.activityIndex ?? destinationIndex;
+              return route.createPolylines({
+                polylineOptions: polylineOptions(routeColorForIndex(activityIndex, varyRouteColors)),
+              });
+            });
           routeLines.forEach((routeLine) => {
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
@@ -312,7 +324,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange]);
+  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
     <button className="map-key-card" onClick={onRequestKey}>
@@ -380,7 +392,7 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function SortableStop({ item, index, count, travelTime, onEdit, onDelete }) {
+function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete }) {
   const {
     attributes,
     listeners,
@@ -395,7 +407,10 @@ function SortableStop({ item, index, count, travelTime, onEdit, onDelete }) {
       style={{ transform: CSS.Transform.toString(transform), transition }}>
       <div className="stop-time">{item.time || '時間未定'}</div>
       <div className="stop-track">
-        <span className="stop-number">{index + 1}</span>
+        <span className="stop-number" style={{
+          backgroundColor: routeColorForIndex(index, varyRouteColors),
+          color: routeColorForIndex(index, varyRouteColors) === '#ffad42' ? '#303841' : '#fff',
+        }}>{index + 1}</span>
         {index < count - 1 && <span className="stop-rule" />}
       </div>
       <div className="stop-copy">
@@ -425,7 +440,7 @@ function SortableStop({ item, index, count, travelTime, onEdit, onDelete }) {
   );
 }
 
-function Timeline({ day, travelTimes, onEdit, onDelete, onAdd, onReorder }) {
+function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -452,7 +467,8 @@ function Timeline({ day, travelTimes, onEdit, onDelete, onAdd, onReorder }) {
           </button>
         ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
-            count={day.activities.length} travelTime={travelTimes[item.id]} onEdit={onEdit} onDelete={onDelete} />)}
+            count={day.activities.length} travelTime={travelTimes[item.id]} varyRouteColors={varyRouteColors}
+            onEdit={onEdit} onDelete={onDelete} />)}
         </SortableContext>}
         {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
       </div>
@@ -467,7 +483,7 @@ function Timeline({ day, travelTimes, onEdit, onDelete, onAdd, onReorder }) {
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
+function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
   const touch = useRef(null);
   const onTouchStart = (event) => {
     const t = event.changedTouches[0];
@@ -500,7 +516,8 @@ function ItinerarySheet({ trip, day, travelTimes, dayIndex, setDayIndex, open, s
         <span>{dayIndex + 1} / {trip.days.length}</span>
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
-      <Timeline day={day} travelTimes={travelTimes} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} />
+      <Timeline day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
+        onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} />
     </section>
   );
 }
@@ -555,7 +572,7 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
           {form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}
         </div>
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
-        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存 <Check size={16} /></button></div>
+        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存</button></div>
       </form>
     </Modal>
   );
@@ -592,13 +609,19 @@ function DayForm({ day, onSave, onAddDay, onClose }) {
   );
 }
 
-function SettingsModal({ apiKey, setApiKey, onClose }) {
+function SettingsModal({ apiKey, setApiKey, varyRouteColors, setVaryRouteColors, onClose }) {
   const [value, setValue] = useState(apiKey);
+  const [varyColors, setVaryColors] = useState(varyRouteColors);
   return (
     <Modal title="Google Mapsを接続" eyebrow="地図の設定" onClose={onClose}>
       <div className="settings-copy"><p>Google Maps JavaScript APIキーを入力すると、地図、場所検索、地図をタップして予定を追加する機能が使えます。</p><p>キーはこのブラウザに保存されます。公開サイトでは、Google CloudでGitHub Pagesのドメインに利用を制限してください。</p></div>
       <label className="field full"><span>APIキー</span><input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="AIza…" /></label>
-      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setApiKey(value.trim()); onClose(); }}>キーを保存 <KeyRound size={16} /></button></div>
+      <label className="route-color-setting">
+        <input type="checkbox" checked={varyColors} onChange={(event) => setVaryColors(event.target.checked)} />
+        <span className="setting-switch" aria-hidden="true"><i /></span>
+        <span><strong>地点ごとにルート色を変える</strong><small>地図の区間と旅程の番号を同じ色で表示します</small></span>
+      </label>
+      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setApiKey(value.trim()); setVaryRouteColors(varyColors); onClose(); }}>設定を保存</button></div>
     </Modal>
   );
 }
@@ -608,11 +631,12 @@ function App() {
   const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
+  const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors', false);
   const apiKey = savedApiKey || bundledApiKey;
   const [selectedId, setSelectedId] = useState(trips[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [railOpen, setRailOpen] = useState(() => window.matchMedia('(min-width: 821px)').matches);
+  const [railOpen, setRailOpen] = useState(false);
   const [travelTimes, setTravelTimes] = useState({});
   const [modal, setModal] = useState(null);
   const trip = trips.find((item) => item.id === selectedId) || trips[0];
@@ -679,11 +703,12 @@ function App() {
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
         <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
-          onRequestKey={() => setModal({ type: 'settings' })} onTravelTimesChange={setTravelTimes} />
+          onRequestKey={() => setModal({ type: 'settings' })} onTravelTimesChange={setTravelTimes}
+          varyRouteColors={varyRouteColors} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
       </section>
-      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
+      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
       <nav className="mobile-nav" aria-label="クイック操作">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
         <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
@@ -691,7 +716,8 @@ function App() {
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
       {modal?.type === 'day' && <DayForm day={modal.day} onClose={() => setModal(null)} onAddDay={addDay} onSave={(saved) => { updateDay(() => saved); setModal(null); }} />}
-      {modal?.type === 'settings' && <SettingsModal apiKey={apiKey} setApiKey={setApiKey} onClose={() => setModal(null)} />}
+      {modal?.type === 'settings' && <SettingsModal apiKey={apiKey} setApiKey={setApiKey}
+        varyRouteColors={varyRouteColors} setVaryRouteColors={setVaryRouteColors} onClose={() => setModal(null)} />}
     </main>
   );
 }

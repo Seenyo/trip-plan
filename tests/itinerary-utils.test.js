@@ -3,6 +3,7 @@ import {
   formatTravelDistance,
   formatTravelDuration,
   reorderActivitiesIntoTimeSlots,
+  routeColorForIndex,
   sortActivitiesByTime,
 } from '../src/itineraryUtils';
 
@@ -38,5 +39,13 @@ describe('itinerary helpers', () => {
       { id: 'C', time: '13:00' },
       { id: 'E', time: '15:00' },
     ]);
+  });
+
+  it('uses one route color by default and point colors when enabled', () => {
+    expect(routeColorForIndex(0)).toBe('#ffad42');
+    expect(routeColorForIndex(4)).toBe('#ffad42');
+    expect(routeColorForIndex(0, true)).toBe('#ffad42');
+    expect(routeColorForIndex(1, true)).toBe('#4f9298');
+    expect(routeColorForIndex(8, true)).toBe('#ffad42');
   });
 });
