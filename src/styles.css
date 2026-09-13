@@ -109,6 +109,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .day-arrows button:disabled { opacity: .2; }.day-arrows span { font: 700 8px 'Space Mono', monospace; color: var(--muted); }
 .timeline { position: relative; padding-top: 3px; }
 .stop { display: grid; grid-template-columns: 48px 23px 1fr; min-height: 105px; padding-top: 21px; }
+.sortable-stop { position: relative; will-change: transform; }
+.sortable-stop.is-dragging { z-index: 3; opacity: .22; }
 .stop-time { padding-top: 3px; color: var(--muted); font: 700 8px 'Space Mono', monospace; }
 .stop-track { position: relative; display: flex; justify-content: center; }
 .stop-number { position: relative; z-index: 2; width: 20px; height: 20px; display: grid; place-items: center; color: white; background: var(--orange); border-radius: 50%; font: 700 8px 'Space Mono', monospace; }
@@ -121,6 +123,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .travel-time small { font-size: 8px; }
 .travel-time em { margin-left: auto; font-style: normal; font-size: 7px; }
 .stop-heading { display: flex; align-items: flex-start; gap: 7px; }
+.drag-handle { width: 24px; height: 24px; margin: -3px 0 0 -5px; flex: 0 0 auto; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; color: var(--muted); background: transparent; cursor: grab; touch-action: none; opacity: .45; transition: color .16s ease, background .16s ease, opacity .16s ease, transform .16s ease; }
+.drag-handle:hover, .drag-handle:focus-visible { color: var(--orange); background: rgba(255,173,66,.16); opacity: 1; }
+.drag-handle:active { cursor: grabbing; transform: scale(.92); }
 .stop-heading h3 { flex: 1; margin: 0; font-size: 15px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; }
 .stop-copy p { margin: 7px 0 5px; color: var(--slate); font-size: 9px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
 .stop-copy small { color: var(--muted); font-size: 9px; line-height: 1.45; }
@@ -129,6 +134,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .stop-actions button { width: 25px; height: 25px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
 .stop-actions button:hover { background: var(--soft); }
 .stop-actions button:last-child:hover { color: var(--orange); }
+.drag-preview { width: min(330px, calc(100vw - 36px)); display: grid; grid-template-columns: 22px 50px minmax(0, 1fr); align-items: center; gap: 8px; padding: 13px 15px; border: 1px solid rgba(255,173,66,.52); border-radius: 13px; color: var(--ink); background: rgba(252,252,250,.98); box-shadow: 0 18px 45px rgba(40,50,55,.22), 0 3px 10px rgba(40,50,55,.12); transform: rotate(.7deg) scale(1.015); }
+.drag-preview svg { color: var(--orange); }
+.drag-preview span { color: var(--muted); font: 700 8px 'Space Mono', monospace; }
+.drag-preview strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .add-stop-inline { margin: 20px 0 8px 82px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 11px; border: 0; border-radius: 9px; background: var(--orange); color: white; font-size: 9px; font-weight: 700; cursor: pointer; }
 .empty-day { margin-top: 28px; width: 100%; padding: 30px; border: 1px dashed rgba(48,56,65,.24); border-radius: 14px; background: var(--soft); display: grid; justify-items: center; gap: 5px; cursor: pointer; }
 .empty-day > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: white; background: var(--orange); margin-bottom: 5px; }

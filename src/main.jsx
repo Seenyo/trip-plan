@@ -1,12 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  sortableKeyboardCoordinates,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   ArrowLeft,
   CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  GripVertical,
   KeyRound,
   MapPin,
   Navigation,
@@ -24,7 +41,12 @@ import { icelandTrip } from './icelandTrip';
 import { useSharedWorkspace } from './useSharedWorkspace';
 import './styles.css';
 import PlaceSearch from './PlaceSearch';
-import { formatTravelDistance, formatTravelDuration, sortActivitiesByTime } from './itineraryUtils';
+import {
+  formatTravelDistance,
+  formatTravelDuration,
+  reorderActivitiesIntoTimeSlots,
+  sortActivitiesByTime,
+} from './itineraryUtils';
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
@@ -358,48 +380,94 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function Timeline({ day, travelTimes, onEdit, onDelete, onAdd }) {
+function SortableStop({ item, index, count, travelTime, onEdit, onDelete }) {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: count < 2 });
   return (
-    <div className="timeline">
-      {day.activities.length === 0 ? (
-        <button className="empty-day" onClick={onAdd}>
-          <span><Sparkles size={20} /></span>
-          <strong>この日の予定を作りましょう</strong>
-          <small>最初の場所や予定を追加してください。</small>
-        </button>
-      ) : day.activities.map((item, index) => (
-        <article className="stop" key={item.id}>
-          <div className="stop-time">{item.time || '時間未定'}</div>
-          <div className="stop-track">
-            <span className="stop-number">{index + 1}</span>
-            {index < day.activities.length - 1 && <span className="stop-rule" />}
+    <article ref={setNodeRef} className={`stop sortable-stop ${isDragging ? 'is-dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}>
+      <div className="stop-time">{item.time || '時間未定'}</div>
+      <div className="stop-track">
+        <span className="stop-number">{index + 1}</span>
+        {index < count - 1 && <span className="stop-rule" />}
+      </div>
+      <div className="stop-copy">
+        {travelTime && <div className="travel-time">
+          <span><Navigation size={13} /> 車</span>
+          <strong>{formatTravelDuration(travelTime.durationMillis)}</strong>
+          {formatTravelDistance(travelTime.distanceMeters)
+            && <small>· {formatTravelDistance(travelTime.distanceMeters)}</small>}
+          <em>{travelTime.fromPreviousDay ? '前の日から' : '前の予定から'}</em>
+        </div>}
+        <div className="stop-heading">
+          {count > 1 && <button ref={setActivatorNodeRef} className="drag-handle" type="button"
+            aria-label={`${item.title}を並べ替える`} title="ドラッグして並べ替え"
+            onTouchStart={(event) => event.stopPropagation()} {...attributes} {...listeners}>
+            <GripVertical size={16} />
+          </button>}
+          <h3>{item.title}</h3>
+          <div className="stop-actions">
+            <button onClick={() => onEdit(item)} aria-label={`${item.title}を編集`}><Pencil size={15} /></button>
+            <button onClick={() => onDelete(item.id)} aria-label={`${item.title}を削除`}><Trash2 size={15} /></button>
           </div>
-          <div className="stop-copy">
-            {travelTimes[item.id] && <div className="travel-time">
-              <span><Navigation size={13} /> 車</span>
-              <strong>{formatTravelDuration(travelTimes[item.id].durationMillis)}</strong>
-              {formatTravelDistance(travelTimes[item.id].distanceMeters)
-                && <small>· {formatTravelDistance(travelTimes[item.id].distanceMeters)}</small>}
-              <em>{travelTimes[item.id].fromPreviousDay ? '前の日から' : '前の予定から'}</em>
-            </div>}
-            <div className="stop-heading">
-              <h3>{item.title}</h3>
-              <div className="stop-actions">
-                <button onClick={() => onEdit(item)} aria-label={`${item.title}を編集`}><Pencil size={15} /></button>
-                <button onClick={() => onDelete(item.id)} aria-label={`${item.title}を削除`}><Trash2 size={15} /></button>
-              </div>
-            </div>
-            <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
-            {item.notes && <small>{item.notes}</small>}
-          </div>
-        </article>
-      ))}
-      {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
-    </div>
+        </div>
+        <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
+        {item.notes && <small>{item.notes}</small>}
+      </div>
+    </article>
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onEditDay }) {
+function Timeline({ day, travelTimes, onEdit, onDelete, onAdd, onReorder }) {
+  const [activeId, setActiveId] = useState(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const activeItem = day.activities.find((item) => item.id === activeId);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const finishDrag = ({ active, over }) => {
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+    const fromIndex = day.activities.findIndex((item) => item.id === active.id);
+    const toIndex = day.activities.findIndex((item) => item.id === over.id);
+    onReorder(reorderActivitiesIntoTimeSlots(day.activities, fromIndex, toIndex));
+  };
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={({ active }) => setActiveId(active.id)} onDragCancel={() => setActiveId(null)} onDragEnd={finishDrag}>
+      <div className="timeline">
+        {day.activities.length === 0 ? (
+          <button className="empty-day" onClick={onAdd}>
+            <span><Sparkles size={20} /></span>
+            <strong>この日の予定を作りましょう</strong>
+            <small>最初の場所や予定を追加してください。</small>
+          </button>
+        ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
+            count={day.activities.length} travelTime={travelTimes[item.id]} onEdit={onEdit} onDelete={onDelete} />)}
+        </SortableContext>}
+        {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
+      </div>
+      <DragOverlay dropAnimation={reducedMotion ? null : { duration: 230, easing: 'cubic-bezier(.2,.9,.3,1)' }}>
+        {activeItem && <div className="drag-preview">
+          <GripVertical size={17} />
+          <span>{activeItem.time || '時間未定'}</span>
+          <strong>{activeItem.title}</strong>
+        </div>}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+function ItinerarySheet({ trip, day, travelTimes, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
   const touch = useRef(null);
   const onTouchStart = (event) => {
     const t = event.changedTouches[0];
@@ -432,7 +500,7 @@ function ItinerarySheet({ trip, day, travelTimes, dayIndex, setDayIndex, open, s
         <span>{dayIndex + 1} / {trip.days.length}</span>
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
-      <Timeline day={day} travelTimes={travelTimes} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
+      <Timeline day={day} travelTimes={travelTimes} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} />
     </section>
   );
 }
@@ -615,7 +683,7 @@ function App() {
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
       </section>
-      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onEditDay={() => setModal({ type: 'day', day })} />
+      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
       <nav className="mobile-nav" aria-label="クイック操作">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
         <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>

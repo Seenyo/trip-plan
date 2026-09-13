@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatTravelDistance, formatTravelDuration, sortActivitiesByTime } from '../src/itineraryUtils';
+import {
+  formatTravelDistance,
+  formatTravelDuration,
+  reorderActivitiesIntoTimeSlots,
+  sortActivitiesByTime,
+} from '../src/itineraryUtils';
 
 describe('itinerary helpers', () => {
   it('reorders edited activities by time and leaves unscheduled items last', () => {
@@ -16,5 +21,22 @@ describe('itinerary helpers', () => {
     expect(formatTravelDuration(95 * 60_000)).toBe('1時間35分');
     expect(formatTravelDistance(850)).toBe('850 m');
     expect(formatTravelDistance(12_400)).toBe('12 km');
+  });
+
+  it('moves activities through the existing chronological time slots', () => {
+    const activities = [
+      { id: 'A', time: '05:00' },
+      { id: 'B', time: '10:00' },
+      { id: 'C', time: '11:00' },
+      { id: 'D', time: '13:00' },
+      { id: 'E', time: '15:00' },
+    ];
+    expect(reorderActivitiesIntoTimeSlots(activities, 3, 1)).toEqual([
+      { id: 'A', time: '05:00' },
+      { id: 'D', time: '10:00' },
+      { id: 'B', time: '11:00' },
+      { id: 'C', time: '13:00' },
+      { id: 'E', time: '15:00' },
+    ]);
   });
 });
