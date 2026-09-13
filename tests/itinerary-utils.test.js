@@ -7,6 +7,7 @@ import {
   routeColorForIndex,
   routeTextColor,
   sortActivitiesByTime,
+  travelModeForActivity,
 } from '../src/itineraryUtils';
 
 describe('itinerary helpers', () => {
@@ -24,6 +25,12 @@ describe('itinerary helpers', () => {
     expect(formatTravelDuration(95 * 60_000)).toBe('1時間35分');
     expect(formatTravelDistance(850)).toBe('850 m');
     expect(formatTravelDistance(12_400)).toBe('12 km');
+  });
+
+  it('defaults travel to driving and preserves an explicit walking choice', () => {
+    expect(travelModeForActivity({})).toBe('DRIVING');
+    expect(travelModeForActivity({ travelMode: 'DRIVING' })).toBe('DRIVING');
+    expect(travelModeForActivity({ travelMode: 'WALKING' })).toBe('WALKING');
   });
 
   it('moves activities through the existing chronological time slots', () => {

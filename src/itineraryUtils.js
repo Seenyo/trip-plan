@@ -27,6 +27,8 @@ export const routeColorForIndex = (index, varyByPoint = false) => varyByPoint
   ? ROUTE_POINT_COLORS[index % ROUTE_POINT_COLORS.length]
   : DEFAULT_ROUTE_COLOR;
 
+export const travelModeForActivity = (activity) => activity?.travelMode === 'WALKING' ? 'WALKING' : 'DRIVING';
+
 const relativeLuminance = (hexColor) => {
   const channels = hexColor.match(/[\da-f]{2}/gi)?.map((channel) => {
     const value = Number.parseInt(channel, 16) / 255;
