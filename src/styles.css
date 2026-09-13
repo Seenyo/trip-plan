@@ -135,11 +135,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .empty-day strong { font-size: 15px; font-weight: 700; }.empty-day small { color: var(--muted); font-size: 9px; }
 .mobile-nav { display: none; }
 
-.itinerary-view-switch .plan-view-switch { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid #d9d9d9; border-radius: 10px; background: #f0f0f0; }
-.itinerary-view-switch .plan-view-switch button { min-width: 58px; padding: 7px 11px; border: 0; border-radius: 7px; color: #687078; background: transparent; font-size: 9px; font-weight: 800; cursor: pointer; }
-.itinerary-view-switch .plan-view-switch button.active { color: white; background: #303841; }
-.plan-loading { min-height: 100dvh; display: grid; place-items: center; color: #a1a1a1; background: #171717; font-size: 13px; font-weight: 700; }
-
 /* Forms */
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; padding: 22px; display: grid; place-items: center; background: rgba(40,50,55,.38); backdrop-filter: blur(6px); animation: fade-in .18s ease both; }
 .modal { width: min(510px, 100%); max-height: min(760px, calc(100dvh - 44px)); overflow-y: auto; padding: 27px; background: var(--paper); border-radius: 18px; box-shadow: 0 24px 70px rgba(40,50,55,.2); animation: rise-in .24s cubic-bezier(.2,.9,.3,1) both; }
@@ -182,7 +177,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .topbar { height: 90px; padding: max(13px, env(safe-area-inset-top)) 14px 11px; }
   .mobile-menu { display: grid; }
   .trip-heading h1 { font-size: 19px; }.trip-heading p { display: none; }.trip-heading .eyebrow { font-size: 7px; }
-  .itinerary-view-switch { display: none; }
   .map-search { top: 94px; width: calc(100% - 28px); }
   .desktop-day-strip, .map-hint { display: none; }
   .map-key-card { top: 38%; }
@@ -200,7 +194,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .stop { grid-template-columns: 46px 22px 1fr; min-height: 101px; padding-top: 19px; }
   .stop-actions { opacity: 1; gap: 1px; }
   .add-stop-inline { margin-left: 76px; }
-  .mobile-nav { position: fixed; z-index: 25; inset: auto 0 0; height: calc(64px + env(safe-area-inset-bottom)); padding: 6px 54px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; background: rgba(245,245,245,.97); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+  .mobile-nav { position: fixed; z-index: 25; inset: auto 0 0; height: calc(64px + env(safe-area-inset-bottom)); padding: 6px 54px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(2, 1fr); align-items: center; background: rgba(245,245,245,.97); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
   .mobile-nav button { height: 46px; padding: 3px; border: 0; background: transparent; display: grid; justify-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 8px; font-weight: 700; }
   .mobile-nav button.nav-add { width: 48px; height: 48px; justify-self: center; border-radius: 15px; background: var(--orange); color: var(--paper); box-shadow: 0 7px 18px rgba(48,56,65,.2); }
   .modal-backdrop { align-items: end; padding: 0; }

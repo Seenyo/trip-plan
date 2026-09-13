@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { isSupabaseConfigured, loadSharedWorkspace, saveSharedWorkspace } from './supabase';
 
 const TRIPS_KEY = 'roam.trips.v3';
-const PLAN_KEY = 'roam.plan.v1';
 
 const readJson = (key, fallback) => {
   try {
@@ -15,8 +14,6 @@ const readJson = (key, fallback) => {
 
 export function useSharedWorkspace(initialTrips) {
   const [trips, setTrips] = useState(() => readJson(TRIPS_KEY, initialTrips));
-  const [planDocument, setPlanDocument] = useState(() => readJson(PLAN_KEY, []));
-  const [planMarkdown, setPlanMarkdown] = useState('');
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'loading' : 'local');
   const [ready, setReady] = useState(!isSupabaseConfigured);
   const revisionRef = useRef(0);
@@ -40,12 +37,9 @@ export function useSharedWorkspace(initialTrips) {
         if (!remote) throw new Error('共有ワークスペースが見つかりません。');
         revisionRef.current = remote.revision || 0;
         const remoteTrips = Array.isArray(remote.trips) && remote.trips.length ? remote.trips : trips;
-        const remotePlan = Array.isArray(remote.plan_document) ? remote.plan_document : planDocument;
         // Only the remote payload is saved; local fallback seeds still need a write.
-        savedSnapshotRef.current = JSON.stringify([remote.trips, remote.plan_document, remote.plan_markdown || '']);
+        savedSnapshotRef.current = JSON.stringify(remote.trips);
         setTrips(remoteTrips);
-        setPlanDocument(remotePlan);
-        setPlanMarkdown(remote.plan_markdown || '');
         setReady(true);
         setSyncStatus('saved');
       } catch (error) {
@@ -68,12 +62,8 @@ export function useSharedWorkspace(initialTrips) {
   }, [trips]);
 
   useEffect(() => {
-    localStorage.setItem(PLAN_KEY, JSON.stringify(planDocument));
-  }, [planDocument]);
-
-  useEffect(() => {
     if (!ready || !isSupabaseConfigured) return undefined;
-    const snapshot = JSON.stringify([trips, planDocument, planMarkdown]);
+    const snapshot = JSON.stringify(trips);
     if (snapshot === savedSnapshotRef.current && pendingWritesRef.current === 0) {
       setSyncStatus('saved');
       return undefined;
@@ -88,8 +78,6 @@ export function useSharedWorkspace(initialTrips) {
         try {
           const saved = await saveSharedWorkspace({
             trips,
-            planDocument,
-            planMarkdown,
             revision: revisionRef.current,
           });
           revisionRef.current = saved?.revision || revisionRef.current + 1;
@@ -104,12 +92,7 @@ export function useSharedWorkspace(initialTrips) {
       });
     }, 700);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [ready, trips, planDocument, planMarkdown]);
+  }, [ready, trips]);
 
-  const updatePlan = (document, markdown = '') => {
-    setPlanDocument(document);
-    setPlanMarkdown(markdown);
-  };
-
-  return { trips, setTrips, planDocument, updatePlan, syncStatus };
+  return { trips, setTrips, syncStatus };
 }

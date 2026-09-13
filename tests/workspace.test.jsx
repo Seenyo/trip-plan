@@ -10,7 +10,7 @@ vi.mock('../src/supabase', () => ({
   loadSharedWorkspace: vi.fn(),
   saveSharedWorkspace: vi.fn(),
 }));
-const remote = { trips: [{ id: 'remote' }], plan_document: [], plan_markdown: '', revision: 4 };
+const remote = { trips: [{ id: 'remote' }], revision: 4 };
 const mount = async (options) => {
   let hook;
   await act(async () => { hook = renderHook(() => useSharedWorkspace([{ id: 'local' }]), options); });
@@ -97,7 +97,7 @@ it('persists local seed trips when the remote workspace has migration defaults',
   await act(() => vi.advanceTimersByTimeAsync(1000));
   expect(saveSharedWorkspace).toHaveBeenCalledTimes(1);
   expect(saveSharedWorkspace).toHaveBeenCalledWith({
-    trips: [{ id: 'local' }], planDocument: [], planMarkdown: '', revision: 1,
+    trips: [{ id: 'local' }], revision: 1,
   });
   expect(result.current.syncStatus).toBe('saved');
 });
