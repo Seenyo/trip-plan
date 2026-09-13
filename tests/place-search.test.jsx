@@ -40,15 +40,15 @@ it('offers all results and only sets coordinates after the user selects one', as
     sessionToken: expect.any(Object),
   }));
   expect(fetchSuggestions.mock.calls[0][0]).not.toHaveProperty('includedRegionCodes');
-  expect(searchByText).not.toHaveBeenCalled();
+  expect(searchByText).toHaveBeenCalledWith(expect.objectContaining({ textQuery: 'Reyk', maxResultCount: 5 }));
   expect(screen.getAllByRole('listitem')).toHaveLength(2);
   expect(onSelect).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Reykjanes' })));
   expect(onSelect).toHaveBeenCalledWith({ title: 'Reykjanes', location: 'Reykjanes', coords: { lat: 64, lng: -21 } });
   expect(screen.queryByRole('list')).toBeNull();
 });
-it('falls back to text search for localized place names that autocomplete does not match', async () => {
-  fetchSuggestions.mockResolvedValue({ suggestions: [] });
+it('prioritizes text search for localized names when autocomplete returns an unrelated candidate', async () => {
+  fetchSuggestions.mockResolvedValue({ suggestions: [{ placePrediction: place('ヘアーサロン デフィ', 'Tokyo, Japan') }] });
   searchByText.mockResolvedValue({ places: [{
     id: 'dettifoss',
     displayName: 'Dettifoss',
@@ -64,6 +64,8 @@ it('falls back to text search for localized place names that autocomplete does n
     language: expect.any(String),
     maxResultCount: 5,
   });
+  expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  expect(screen.getAllByRole('listitem')[0].textContent).toContain('Dettifoss');
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /Dettifoss/ })));
   expect(onSelect).toHaveBeenCalledWith({
     title: 'Dettifoss',
@@ -102,6 +104,7 @@ it('ignores old responses when the query changes', async () => {
 });
 it('handles failed searches without submitting the enclosing activity form', async () => {
   fetchSuggestions.mockRejectedValue(new Error('offline'));
+  searchByText.mockRejectedValue(new Error('offline'));
   const submit = vi.fn();
   render(<form onSubmit={submit}><PlaceSearch value="Test" onChange={() => {}} onSelect={() => {}} apiKey="test" /></form>);
   await act(async () => fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' }));

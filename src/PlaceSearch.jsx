@@ -55,26 +55,35 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
       const { AutocompleteSessionToken, AutocompleteSuggestion, Place } = await window.google.maps.importLibrary('places');
       if (request.current !== id) return;
       sessionToken.current ||= new AutocompleteSessionToken();
-      const response = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input: value,
-        language: browserLanguage(),
-        sessionToken: sessionToken.current,
-      });
-      if (request.current !== id) return;
-      let results = (response.suggestions || [])
-        .map((item) => item.placePrediction)
-        .filter(Boolean)
-        .map(autocompleteCandidate);
-      if (!results.length) {
-        const textResponse = await Place.searchByText({
+      const [autocompleteResponse, textResponse] = await Promise.allSettled([
+        AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: value,
+          language: browserLanguage(),
+          sessionToken: sessionToken.current,
+        }),
+        Place.searchByText({
           textQuery: value.trim(),
           fields: ['id', 'displayName', 'formattedAddress', 'location'],
           language: browserLanguage(),
           maxResultCount: 5,
-        });
-        if (request.current !== id) return;
-        results = (textResponse.places || []).filter((place) => place.location).map(textSearchCandidate);
+        }),
+      ]);
+      if (request.current !== id) return;
+      if (autocompleteResponse.status === 'rejected' && textResponse.status === 'rejected') {
+        throw autocompleteResponse.reason;
       }
+      const autocompleteResults = (autocompleteResponse.value?.suggestions || [])
+        .map((item) => item.placePrediction)
+        .filter(Boolean)
+        .map(autocompleteCandidate);
+      const textResults = (textResponse.value?.places || [])
+        .filter((place) => place.location)
+        .map(textSearchCandidate);
+      const seen = new Set();
+      const results = [...textResults, ...autocompleteResults]
+        .filter((candidate) => !candidate.id || !seen.has(candidate.id))
+        .filter((candidate) => { if (candidate.id) seen.add(candidate.id); return true; })
+        .slice(0, 5);
       setCandidates(results);
       setStatus(results.length ? 'results' : 'empty');
     } catch (error) {
