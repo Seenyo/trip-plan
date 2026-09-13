@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowLeft,
@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
-  FilePlus2,
   KeyRound,
   MapPin,
   Navigation,
@@ -27,18 +26,7 @@ import './styles.css';
 import PlaceSearch from './PlaceSearch';
 import { formatTravelDistance, formatTravelDuration, sortActivitiesByTime } from './itineraryUtils';
 
-const PlanWorkspace = lazy(() => import('./PlanWorkspace'));
-
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-
-function ViewSwitch({ view, onChange }) {
-  return (
-    <div className="plan-view-switch" aria-label="表示を切り替える">
-      <button className={view === 'itinerary' ? 'active' : ''} onClick={() => onChange('itinerary')}>旅程</button>
-      <button className={view === 'plan' ? 'active' : ''} onClick={() => onChange('plan')}>プラン</button>
-    </div>
-  );
-}
 
 const seedTrips = [icelandTrip, domesticTrip];
 const migrateTrips = () => {
@@ -509,7 +497,7 @@ function TripForm({ onSave, onClose }) {
   const [form, setForm] = useState({ title: '', subtitle: '', startDate: '', endDate: '', color: '#FF5722' });
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
   return (
-    <Modal title="新しい旅行を作成" eyebrow="新規プラン" onClose={onClose}>
+    <Modal title="新しい旅行を作成" eyebrow="新規旅行" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title && form.startDate) onSave(form); }}>
         <label className="field full"><span>旅行名</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="例：京都で過ごす週末" /></label>
         <label className="field full"><span>旅行の説明</span><input value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)} placeholder="例：お寺、朝の散歩、とっておきの食事" /></label>
@@ -549,11 +537,10 @@ function SettingsModal({ apiKey, setApiKey, onClose }) {
 
 function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
-  const { trips, setTrips, planDocument, updatePlan, syncStatus } = useSharedWorkspace(initialTrips);
+  const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
   const apiKey = savedApiKey || bundledApiKey;
-  const [view, setView] = useStoredState('roam.view', 'itinerary');
   const [selectedId, setSelectedId] = useState(trips[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -604,40 +591,8 @@ function App() {
   };
   const mapPick = useCallback((place) => setModal({ type: 'activity', activity: { time: '10:00', title: '', notes: '', ...place } }), []);
 
-  const addPlanActivity = ({ tripId, dayId, activity }) => {
-    const saved = { ...activity, id: uid() };
-    setTrips((current) => current.map((item) => item.id !== tripId ? item : ({
-      ...item,
-      days: item.days.map((tripDay) => tripDay.id !== dayId ? tripDay : ({
-        ...tripDay,
-        activities: sortActivitiesByTime([...tripDay.activities, saved]),
-      })),
-    })));
-    setSelectedId(tripId);
-    const targetTrip = trips.find((item) => item.id === tripId);
-    const targetIndex = targetTrip?.days.findIndex((item) => item.id === dayId) ?? 0;
-    setDayIndex(Math.max(0, targetIndex));
-  };
-
   useEffect(() => { setDayIndex(0); }, [selectedId]);
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
-
-  if (view === 'plan' && trips.length) {
-    return (
-      <Suspense fallback={<div className="plan-loading">プランを開いています…</div>}>
-        <PlanWorkspace
-          trips={trips}
-          planDocument={planDocument}
-          onPlanChange={updatePlan}
-          onAddActivity={addPlanActivity}
-          selectedTripId={selectedId}
-          status={syncStatus}
-          view={view}
-          onViewChange={setView}
-        />
-      </Suspense>
-    );
-  }
 
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
 
@@ -652,7 +607,6 @@ function App() {
             {railOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
-          <div className="itinerary-view-switch"><ViewSwitch view={view} onChange={setView} /></div>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
         </header>
         <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
@@ -665,7 +619,6 @@ function App() {
       <nav className="mobile-nav" aria-label="クイック操作">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
         <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
-        <button onClick={() => setView('plan')}><FilePlus2 size={19} /><span>プラン</span></button>
       </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}

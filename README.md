@@ -1,6 +1,6 @@
 # Roam — trip planner
 
-A responsive trip planner with a map-first itinerary and a Notion-style planning notebook. Trips, notebook blocks, and notebook images are synchronized through one shared Supabase workspace, with browser storage as a fallback.
+A responsive trip planner with a map-first itinerary. Trips are synchronized through one shared Supabase workspace, with browser storage as a fallback.
 
 The shared workspace does not use authentication. Anyone who can open the deployed site can read and edit its trip data.
 
@@ -35,7 +35,7 @@ The Vite configuration exposes only these named variables to the browser bundle.
 
 ## Supabase
 
-The database and Storage setup is documented in `supabase/migrations`. The public `app_state` table has RLS enabled and exposes only the single shared workspace row. The public `trip-plan-images` bucket accepts images up to 10MB.
+The database setup is documented in `supabase/migrations`. The public `app_state` table has RLS enabled and exposes only the single shared workspace row.
 
 ## Deployment
 
