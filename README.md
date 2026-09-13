@@ -13,7 +13,7 @@ npm run dev
 
 ## Google Maps
 
-Open Settings in the app and paste a Google Maps JavaScript API key. Enable the **Maps JavaScript API**, **Geocoding API**, and **Routes API**. The Routes API is used to draw the real driving route through each day's stops.
+Open Settings in the app and paste a Google Maps JavaScript API key. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions, and Routes API draws the real driving route and estimates travel time between each day's stops.
 
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
