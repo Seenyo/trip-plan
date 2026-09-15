@@ -19,10 +19,18 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   expect(sheet.classList.contains('sheet-open')).toBe(true);
 
+  sheet.scrollTop = 100;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
   expect(sheet.classList.contains('sheet-open')).toBe(true);
 
+  sheet.scrollTop = 0;
+  fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  expect(sheet.classList.contains('sheet-open')).toBe(false);
+
+  fireEvent.click(sheet.querySelector('.sheet-handle-wrap'));
+  expect(sheet.classList.contains('sheet-open')).toBe(true);
   fireEvent.click(sheet.querySelector('.sheet-handle-wrap'));
   expect(sheet.classList.contains('sheet-open')).toBe(false);
 
