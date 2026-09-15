@@ -227,6 +227,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .sheet-title-row h2 { font-size: 24px; }.sheet-title-row p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .itinerary-sheet:not(.sheet-open) .sheet-title-row h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .itinerary-sheet:not(.sheet-open) .sheet-title-row p { display: none; }
+  .itinerary-sheet:not(.sheet-open) .sheet-title-row > button,
+  .itinerary-sheet:not(.sheet-open) .day-arrows,
+  .itinerary-sheet:not(.sheet-open) .timeline { display: none; }
   .day-arrows { height: 39px; }
   .stop { grid-template-columns: 46px 22px 1fr; min-height: 101px; padding-top: 19px; }
   .stop-actions { opacity: 1; gap: 1px; }
