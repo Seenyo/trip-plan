@@ -526,9 +526,13 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
 
 function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
   const touch = useRef(null);
+  const sheet = useRef(null);
+  useEffect(() => {
+    if (!open && sheet.current) sheet.current.scrollTop = 0;
+  }, [open]);
   const onTouchStart = (event) => {
     const t = event.changedTouches[0];
-    touch.current = { x: t.clientX, y: t.clientY };
+    touch.current = { x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1 };
   };
   const onTouchEnd = (event) => {
     if (!touch.current) return;
@@ -537,11 +541,14 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
     const dy = t.clientY - touch.current.y;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
-    } else if (!open && dy < -35) setOpen(true);
+    } else if (Math.abs(dy) > Math.abs(dx)) {
+      if (!open && dy < -35) setOpen(true);
+      else if (open && touch.current.atTop && event.currentTarget.scrollTop <= 1 && dy > 45) setOpen(false);
+    }
     touch.current = null;
   };
   return (
-    <section className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
+    <section ref={sheet} className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
       <button className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? '旅程を閉じる' : '旅程を開く'}><span className="sheet-handle" /></button>
       <div className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
       <div className="sheet-title-row">

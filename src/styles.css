@@ -214,9 +214,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .map-search { top: 94px; width: calc(100% - 28px); }
   .desktop-day-strip, .map-hint { display: none; }
   .map-key-card { top: 38%; }
-  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; top: calc(100dvh - 274px); height: calc(100dvh - 70px); padding: 0 17px calc(24px + env(safe-area-inset-bottom)); border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: top .38s cubic-bezier(.2,.85,.2,1); overflow-y: auto; touch-action: pan-y; }
+  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; top: calc(100dvh - 132px - env(safe-area-inset-bottom)); height: calc(100dvh - 70px); padding: 0 17px calc(24px + env(safe-area-inset-bottom)); border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: top .38s cubic-bezier(.2,.85,.2,1); overflow-y: hidden; touch-action: pan-y; }
   .app-shell.timeline-hidden .itinerary-sheet { padding: 0 17px calc(24px + env(safe-area-inset-bottom)); opacity: 1; visibility: visible; pointer-events: auto; }
-  .itinerary-sheet.sheet-open { top: 72px; }
+  .itinerary-sheet.sheet-open { top: 72px; overflow-y: auto; overscroll-behavior-y: contain; }
   .sheet-handle-wrap { position: sticky; top: 0; z-index: 3; width: 100%; height: 27px; display: grid; place-items: center; border: 0; background: linear-gradient(var(--paper) 72%, transparent); }
   .sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: rgba(48,56,65,.22); }
   .mobile-day-strip { display: block; margin: 0 -2px 12px; }
@@ -225,6 +225,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .day-strip button.active { background: var(--sage); }
   .sheet-title-row { padding: 4px 1px 15px; }
   .sheet-title-row h2 { font-size: 24px; }.sheet-title-row p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .itinerary-sheet:not(.sheet-open) .sheet-title-row h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .itinerary-sheet:not(.sheet-open) .sheet-title-row p { display: none; }
   .day-arrows { height: 39px; }
   .stop { grid-template-columns: 46px 22px 1fr; min-height: 101px; padding-top: 19px; }
   .stop-actions { opacity: 1; gap: 1px; }
