@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import {
   closestCenter,
   DndContext,
@@ -587,13 +588,41 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose,
 }
 
 function Modal({ title, eyebrow, onClose, children, danger }) {
-  return (
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const background = document.getElementById('root');
+    const previouslyInert = background?.inert || false;
+    const previousFocus = document.activeElement;
+    if (background) background.inert = true;
+    const firstFocus = dialogRef.current?.querySelector(danger ? '.secondary-button' : '.modal-heading button');
+    firstFocus?.focus();
+    return () => {
+      if (background) background.inert = previouslyInert;
+      if (previousFocus?.isConnected) previousFocus.focus();
+      else document.querySelector('.rail-toggle')?.focus();
+    };
+  }, [danger]);
+  const containFocus = (event) => {
+    if (event.key !== 'Tab') return;
+    const controls = [...dialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section className={`modal ${danger ? 'danger' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <section ref={dialogRef} className={`modal ${danger ? 'danger' : ''}`} role="dialog" aria-modal="true" aria-label={title} onKeyDown={containFocus}>
         <div className="modal-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="閉じる"><X size={19} /></button></div>
         {children}
       </section>
-    </div>
+    </div>, document.body
   );
 }
 
