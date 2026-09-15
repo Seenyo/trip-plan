@@ -170,6 +170,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .field-with-button input { border: 0; box-shadow: none !important; }.field-with-button button { width: 42px; border: 0; border-left: 1px solid var(--line); background: var(--soft); cursor: pointer; }
 .located { display: flex; align-items: center; gap: 4px; color: var(--slate); font-weight: 600; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 7px; }
+.delete-confirm-copy { margin: -4px 0 20px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.delete-confirm-button { min-height: 39px; padding: 0 15px; border: 0; border-radius: 9px; color: white; background: #b43f34; font-size: 10px; font-weight: 700; cursor: pointer; }
+.delete-confirm-button:hover { background: #98352d; }
 .primary-button, .secondary-button { min-height: 39px; padding: 0 15px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; font-weight: 700; cursor: pointer; }
 .primary-button { border: 0; color: white; background: var(--orange); }.primary-button svg { transform: rotate(135deg); }
 .secondary-button { border: 1px solid var(--line); background: white; color: var(--ink); }

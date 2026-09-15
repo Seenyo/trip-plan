@@ -772,12 +772,30 @@ function App() {
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
       </section>
-      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => updateDay((current) => ({ ...current, activities: current.activities.filter((item) => item.id !== id) }))} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
+      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
+        const activity = day.activities.find((item) => item.id === id);
+        if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
+      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
       <nav className="mobile-nav" aria-label="クイック操作">
         <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
         <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
       </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
+      {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
+        <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={() => setModal(null)}>キャンセル</button>
+          <button className="delete-confirm-button" onClick={() => {
+            const { tripId, dayId, activity } = modal;
+            setTrips((current) => current.map((item) => item.id === tripId
+              ? { ...item, days: item.days.map((currentDay) => currentDay.id === dayId
+                ? { ...currentDay, activities: currentDay.activities.filter((plan) => plan.id !== activity.id) }
+                : currentDay) }
+              : item));
+            setModal(null);
+          }}>削除する</button>
+        </div>
+      </Modal>}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
       {modal?.type === 'day' && <DayForm day={modal.day} onClose={() => setModal(null)} onAddDay={addDay} onSave={(saved) => { updateDay(() => saved); setModal(null); }} />}
       {modal?.type === 'settings' && <SettingsModal apiKey={apiKey} setApiKey={setApiKey}
