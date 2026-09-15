@@ -85,7 +85,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .route-line path { fill: none; stroke: #ffad42; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 8 7; vector-effect: non-scaling-stroke; }
 .map-pin { position: absolute; z-index: 3; width: 33px; height: 33px; border: 0; border-radius: 50%; background: var(--orange); color: var(--paper); box-shadow: 0 5px 14px rgba(48,56,65,.2); font: 700 10px 'Space Mono', monospace; cursor: pointer; }
 .pin-1 { left: 22%; top: 21%; }.pin-2 { left: 40%; top: 41%; background: var(--slate); }.pin-3 { left: 69%; top: 47%; color: var(--ink); background: var(--sage); }.pin-4 { left: 58%; top: 73%; color: var(--ink); background: white; }
-.map-key-card { position: absolute; z-index: 5; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(300px, calc(100% - 42px)); display: flex; align-items: center; gap: 11px; padding: 11px; text-align: left; border: 1px solid var(--line); background: rgba(245,245,245,.96); border-radius: 13px; box-shadow: var(--shadow); cursor: pointer; }
+.map-key-card { position: absolute; z-index: 5; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(300px, calc(100% - 42px)); display: flex; align-items: center; gap: 11px; padding: 11px; text-align: left; border: 1px solid var(--line); background: rgba(245,245,245,.96); border-radius: 13px; box-shadow: var(--shadow); }
 .map-key-card > span:nth-child(2) { display: grid; gap: 2px; flex: 1; }
 .map-key-card strong { font-size: 11px; }.map-key-card small { color: var(--muted); font-size: 8px; line-height: 1.35; }
 .map-key-icon { flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--orange); }
@@ -145,7 +145,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .empty-day { margin-top: 28px; width: 100%; padding: 30px; border: 1px dashed rgba(48,56,65,.24); border-radius: 14px; background: var(--soft); display: grid; justify-items: center; gap: 5px; cursor: pointer; }
 .empty-day > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: white; background: var(--orange); margin-bottom: 5px; }
 .empty-day strong { font-size: 15px; font-weight: 700; }.empty-day small { color: var(--muted); font-size: 9px; }
-.mobile-nav { display: none; }
 
 /* Forms */
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; padding: 22px; display: grid; place-items: center; background: rgba(40,50,55,.38); backdrop-filter: blur(6px); animation: fade-in .18s ease both; }
@@ -170,12 +169,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .field-with-button input { border: 0; box-shadow: none !important; }.field-with-button button { width: 42px; border: 0; border-left: 1px solid var(--line); background: var(--soft); cursor: pointer; }
 .located { display: flex; align-items: center; gap: 4px; color: var(--slate); font-weight: 600; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 7px; }
+.delete-confirm-copy { margin: -4px 0 20px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.delete-confirm-button { min-height: 39px; padding: 0 15px; border: 0; border-radius: 9px; color: white; background: #b43f34; font-size: 10px; font-weight: 700; cursor: pointer; }
+.delete-confirm-button:hover { background: #98352d; }
 .primary-button, .secondary-button { min-height: 39px; padding: 0 15px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; font-weight: 700; cursor: pointer; }
 .primary-button { border: 0; color: white; background: var(--orange); }.primary-button svg { transform: rotate(135deg); }
 .secondary-button { border: 1px solid var(--line); background: white; color: var(--ink); }
 .text-button { display: flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--orange); font-size: 10px; font-weight: 700; cursor: pointer; text-align: left; }
-.settings-copy { color: var(--muted); font-size: 10px; line-height: 1.6; margin: -8px 0 18px; }.settings-copy p { margin: 7px 0; }
-.route-color-setting { margin-top: 17px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.62); cursor: pointer; }
+.route-color-setting { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.62); cursor: pointer; }
 .route-color-setting > input { position: absolute; opacity: 0; pointer-events: none; }
 .setting-switch { width: 34px; height: 20px; padding: 2px; display: flex; align-items: center; border-radius: 12px; background: #cbd0d2; transition: background .2s ease; }
 .setting-switch i { width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(40,50,55,.24); transition: transform .24s cubic-bezier(.2,.9,.3,1); }
@@ -206,15 +207,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .trip-rail { position: fixed; inset: 0 auto 0 0; width: min(84vw, 326px); transform: translateX(-105%); transition: transform .28s cubic-bezier(.2,.8,.2,1); box-shadow: 14px 0 36px rgba(48,56,65,.18); }
   .trip-rail.rail-open { transform: translateX(0); }
   .rail-scrim { display: block; position: fixed; z-index: 29; inset: 0; border: 0; background: rgba(48,56,65,.28); backdrop-filter: blur(2px); }
-  .map-stage { height: calc(100dvh - 64px); }
+  .map-stage { height: 100dvh; }
   .topbar { height: 90px; padding: max(13px, env(safe-area-inset-top)) 14px 11px; }
   .mobile-menu { display: grid; }
   .trip-heading h1 { font-size: 19px; }.trip-heading p { display: none; }.trip-heading .eyebrow { font-size: 7px; }
   .map-search { top: 94px; width: calc(100% - 28px); }
   .desktop-day-strip, .map-hint { display: none; }
   .map-key-card { top: 38%; }
-  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; top: calc(100dvh - 274px); height: calc(100dvh - 70px); padding: 0 17px 82px; border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: top .38s cubic-bezier(.2,.85,.2,1); overflow-y: auto; touch-action: pan-y; }
-  .app-shell.timeline-hidden .itinerary-sheet { padding: 0 17px 82px; opacity: 1; visibility: visible; pointer-events: auto; }
+  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; top: calc(100dvh - 274px); height: calc(100dvh - 70px); padding: 0 17px calc(24px + env(safe-area-inset-bottom)); border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: top .38s cubic-bezier(.2,.85,.2,1); overflow-y: auto; touch-action: pan-y; }
+  .app-shell.timeline-hidden .itinerary-sheet { padding: 0 17px calc(24px + env(safe-area-inset-bottom)); opacity: 1; visibility: visible; pointer-events: auto; }
   .itinerary-sheet.sheet-open { top: 72px; }
   .sheet-handle-wrap { position: sticky; top: 0; z-index: 3; width: 100%; height: 27px; display: grid; place-items: center; border: 0; background: linear-gradient(var(--paper) 72%, transparent); }
   .sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: rgba(48,56,65,.22); }
@@ -228,9 +229,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .stop { grid-template-columns: 46px 22px 1fr; min-height: 101px; padding-top: 19px; }
   .stop-actions { opacity: 1; gap: 1px; }
   .add-stop-inline { margin-left: 76px; }
-  .mobile-nav { position: fixed; z-index: 25; inset: auto 0 0; height: calc(64px + env(safe-area-inset-bottom)); padding: 6px 54px env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(2, 1fr); align-items: center; background: rgba(245,245,245,.97); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
-  .mobile-nav button { height: 46px; padding: 3px; border: 0; background: transparent; display: grid; justify-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 8px; font-weight: 700; }
-  .mobile-nav button.nav-add { width: 48px; height: 48px; justify-self: center; border-radius: 15px; background: var(--orange); color: var(--paper); box-shadow: 0 7px 18px rgba(48,56,65,.2); }
   .modal-backdrop { align-items: end; padding: 0; }
   .modal { width: 100%; max-height: 90dvh; border-radius: 20px 20px 0 0; padding: 23px 19px calc(23px + env(safe-area-inset-bottom)); }
 }

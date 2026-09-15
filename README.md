@@ -13,7 +13,7 @@ npm run dev
 
 ## Google Maps
 
-Open Settings in the app and paste a Google Maps JavaScript API key. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions, and Routes API draws the real driving route and estimates travel time between each day's stops.
+The map and place search use a Google Maps JavaScript API key configured when the app starts or builds. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions, and Routes API draws driving or walking routes and estimates travel time between stops.
 
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
@@ -21,7 +21,7 @@ For the deployed site, allow this HTTP referrer in the key restrictions:
 https://seenyo.github.io/*
 ```
 
-The Routes API request is cross-origin and sends the site origin as its referrer, so a restriction limited to `/trip-plan/*` will block road routing. A key entered in Settings is saved only in the current browser.
+The Routes API request is cross-origin and sends the site origin as its referrer, so a restriction limited to `/trip-plan/*` will block road routing.
 
 For local and build-time configuration, copy `.env.example` to `.env`:
 
@@ -31,7 +31,9 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 ```
 
-The Vite configuration exposes only these named variables to the browser bundle. Never use a Supabase secret or service-role key in the frontend. The GitHub Pages workflow reads the same names from the repository's Actions secrets.
+Set `GOOGLE_MAP_API_KEY` before starting the dev server; without it, the itinerary still works but the map and place search are unavailable. Restart the dev server after changing `.env`. Settings controls route colors and does not accept a key.
+
+The Vite configuration exposes only these named variables to the browser bundle. Restrict the Google Maps key to the expected site referrers, and never use a Supabase secret or service-role key in the frontend. The GitHub Pages workflow reads the same names from the repository's Actions secrets.
 
 ## Supabase
 
