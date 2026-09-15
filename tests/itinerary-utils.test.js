@@ -8,6 +8,7 @@ import {
   routeTextColor,
   sortActivitiesByTime,
   travelModeForActivity,
+  travelTimesForRoutes,
 } from '../src/itineraryUtils';
 
 describe('itinerary helpers', () => {
@@ -31,6 +32,22 @@ describe('itinerary helpers', () => {
     expect(travelModeForActivity({})).toBe('DRIVING');
     expect(travelModeForActivity({ travelMode: 'DRIVING' })).toBe('DRIVING');
     expect(travelModeForActivity({ travelMode: 'WALKING' })).toBe('WALKING');
+  });
+
+  it('assigns a lone successful fallback route to its actual destination', () => {
+    const stops = [
+      { id: 'katla' }, { id: 'svartifoss' }, { id: 'park' }, { id: 'beach' }, { id: 'hali' },
+    ];
+    const route = { durationMillis: 13 * 60_000, distanceMeters: 14_000, legs: [{ durationMillis: 13 * 60_000 }] };
+    const times = travelTimesForRoutes(stops, [route], [4], [
+      { destinationIndex: 1, requestFailed: false },
+      { destinationIndex: 2, requestFailed: false },
+      { destinationIndex: 3, requestFailed: true },
+    ]);
+    expect(times.katla).toBeUndefined();
+    expect(times.svartifoss).toMatchObject({ unavailable: true, requestFailed: false });
+    expect(times.beach).toMatchObject({ unavailable: true, requestFailed: true });
+    expect(times.hali).toMatchObject({ durationMillis: 13 * 60_000, distanceMeters: 14_000 });
   });
 
   it('moves activities through the existing chronological time slots', () => {
