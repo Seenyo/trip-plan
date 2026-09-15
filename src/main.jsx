@@ -18,13 +18,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   ArrowLeft,
-  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
   CirclePlus,
   GripVertical,
-  KeyRound,
   MapPin,
   Navigation,
   PanelLeftClose,
@@ -126,7 +124,7 @@ function createStopMarker(maps, map, position, number, title, color) {
   return marker;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravelTimesChange, varyRouteColors }) {
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, varyRouteColors }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -372,14 +370,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
   }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
-    <button className="map-key-card" onClick={onRequestKey}>
-      <span className="map-key-icon"><KeyRound size={18} /></span>
+    <div className="map-key-card">
+      <span className="map-key-icon"><MapPin size={18} /></span>
       <span>
-        <strong>{authorizationError ? 'Google Mapsの使用を許可' : 'Google Mapsを接続'}</strong>
-        <small>{authorizationError ? 'Google Cloudのキー制限でこのサイトを許可してください' : '場所検索や地図からの追加にはAPIキーが必要です'}</small>
+        <strong>{authorizationError ? '地図を読み込めませんでした' : '地図を利用できません'}</strong>
+        <small>{authorizationError ? '地図の接続を確認してください' : '場所検索と地図の利用には接続が必要です'}</small>
       </span>
-      <ChevronRight size={18} />
-    </button>
+    </div>
   );
 
   if (!apiKey) {
@@ -418,10 +415,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onRequestKey, onTravel
   );
 }
 
-function SearchBar({ apiKey, onResult, onRequestKey }) {
+function SearchBar({ apiKey, onResult }) {
   const [query, setQuery] = useState('');
   return <PlaceSearch variant="map" value={query} onChange={setQuery} apiKey={apiKey}
-    onRequestKey={onRequestKey} onSelect={(place) => { setQuery(place.location); onResult(place); }} />;
+    onSelect={(place) => { setQuery(place.location); onResult(place); }} />;
 }
 
 function DayStrip({ trip, dayIndex, setDayIndex }) {
@@ -539,7 +536,7 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
     const dy = t.clientY - touch.current.y;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
-    } else if (Math.abs(dy) > 35) setOpen(dy < 0);
+    } else if (!open && dy < -35) setOpen(true);
     touch.current = null;
   };
   return (
@@ -668,19 +665,16 @@ function DayForm({ day, onSave, onAddDay, onClose }) {
   );
 }
 
-function SettingsModal({ apiKey, setApiKey, varyRouteColors, setVaryRouteColors, onClose }) {
-  const [value, setValue] = useState(apiKey);
+function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
   const [varyColors, setVaryColors] = useState(varyRouteColors);
   return (
-    <Modal title="Google Mapsを接続" eyebrow="地図の設定" onClose={onClose}>
-      <div className="settings-copy"><p>Google Maps JavaScript APIキーを入力すると、地図、場所検索、地図をタップして予定を追加する機能が使えます。</p><p>キーはこのブラウザに保存されます。公開サイトでは、Google CloudでGitHub Pagesのドメインに利用を制限してください。</p></div>
-      <label className="field full"><span>APIキー</span><input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="AIza…" /></label>
+    <Modal title="地図の設定" onClose={onClose}>
       <label className="route-color-setting">
         <input type="checkbox" checked={varyColors} onChange={(event) => setVaryColors(event.target.checked)} />
         <span className="setting-switch" aria-hidden="true"><i /></span>
         <span><strong>地点ごとにルート色を変える</strong><small>地図の区間と旅程の番号を同じ色で表示します</small></span>
       </label>
-      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setApiKey(value.trim()); setVaryRouteColors(varyColors); onClose(); }}>設定を保存</button></div>
+      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setVaryRouteColors(varyColors); onClose(); }}>設定を保存</button></div>
     </Modal>
   );
 }
@@ -689,9 +683,8 @@ function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
   const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-  const [savedApiKey, setApiKey] = useStoredState('roam.googleMapsKey', '');
-  const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors', false);
-  const apiKey = savedApiKey || bundledApiKey;
+  const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
+  const apiKey = bundledApiKey;
   const [selectedId, setSelectedId] = useState(trips[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -765,9 +758,9 @@ function App() {
             {timelineOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
           </button>
         </header>
-        <SearchBar apiKey={apiKey} onResult={mapPick} onRequestKey={() => setModal({ type: 'settings' })} />
+        <SearchBar apiKey={apiKey} onResult={mapPick} />
         <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
-          onRequestKey={() => setModal({ type: 'settings' })} onTravelTimesChange={setTravelTimes}
+          onTravelTimesChange={setTravelTimes}
           varyRouteColors={varyRouteColors} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
@@ -776,10 +769,6 @@ function App() {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
-      <nav className="mobile-nav" aria-label="クイック操作">
-        <button onClick={() => setRailOpen(true)}><CalendarDays size={19} /><span>旅行</span></button>
-        <button className="nav-add" aria-label="予定を追加" onClick={() => setModal({ type: 'activity' })}><Plus size={23} /></button>
-      </nav>
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
@@ -798,8 +787,8 @@ function App() {
       </Modal>}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
       {modal?.type === 'day' && <DayForm day={modal.day} onClose={() => setModal(null)} onAddDay={addDay} onSave={(saved) => { updateDay(() => saved); setModal(null); }} />}
-      {modal?.type === 'settings' && <SettingsModal apiKey={apiKey} setApiKey={setApiKey}
-        varyRouteColors={varyRouteColors} setVaryRouteColors={setVaryRouteColors} onClose={() => setModal(null)} />}
+      {modal?.type === 'settings' && <SettingsModal varyRouteColors={varyRouteColors}
+        setVaryRouteColors={setVaryRouteColors} onClose={() => setModal(null)} />}
     </main>
   );
 }
