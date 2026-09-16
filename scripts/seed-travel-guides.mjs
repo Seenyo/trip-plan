@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { loadEnv } from 'vite';
 import { guides, notebooks, checkedAt } from './guide-content.mjs';
+import { appendEnrichment, enrichments } from './guide-enrichment.mjs';
 const env = loadEnv('development', '.', '');
 const client = createClient(process.env.SUPABASE_URL || env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
 const { data: workspace, error } = await client.from('app_state').select('trips,revision').eq('id', 'shared').single();
@@ -19,7 +20,8 @@ for (const trip of workspace.trips.filter((t) => notebooks[t.id])) {
   rows.push({ id: `reservations:${trip.id}`, trip_id: trip.id, parent_id: rootId, title: '予約・連絡先', blocks: [block('text', '航空券、船、レンタカー、宿、ツアーの予約PDFや連絡先をここに追加してください。予約番号・集合場所・受付時刻も一緒に残すと便利です。'), block('table', '', { rows: [['予約', '連絡先・受付・メモ'], ['宿泊', ''], ['交通', ''], ['ツアー', '']] })] });
   for (const activity of trip.days.flatMap((d) => d.activities)) {
     if (!guides[activity.id]) { missing.push(activity.title); continue; }
-    rows.push({ id: `guide:${trip.id}:${activity.id}`, trip_id: trip.id, activity_id: activity.id, title: activity.title, blocks: blocks(guides[activity.id]), checked_at: checkedAt });
+    const row = { id: `guide:${trip.id}:${activity.id}`, trip_id: trip.id, activity_id: activity.id, title: activity.title, blocks: blocks(guides[activity.id]), checked_at: checkedAt };
+    rows.push(enrichments[activity.id] ? appendEnrichment(row, enrichments[activity.id]) : row);
   }
 }
 if (missing.length) throw new Error(`調査ガイドのない予定: ${missing.join('、')}`);

@@ -58,6 +58,8 @@ Original researched Japanese content and source links are in `scripts/guide-cont
 ```bash
 node scripts/seed-travel-guides.mjs         # coverage check only
 node scripts/seed-travel-guides.mjs --write # add missing documents; never overwrite existing pages
+node scripts/enrich-travel-guides.mjs         # preview researched additions to 12 existing guides
+node scripts/enrich-travel-guides.mjs --write # append once, preserving edits; backs up first and checks revisions
 ```
 
 The initial seed covers all 100 activities in the two saved trips, including transport and unspecified stops. Unknown facility/booking details are marked for confirmation; prices and availability are not promised. New stops start with an empty editable guide.
