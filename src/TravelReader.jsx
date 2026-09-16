@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowDown, ArrowUp, BookOpen, Check, ChevronRight, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
-import { attachmentUrl, cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
+import { ATTACHMENT_URL_TTL_SECONDS, attachmentUrl, cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
 import './travelReader.css';
 
 const blockTypes = { heading: '見出し', text: '文章', bullets: '箇条書き', checklist: 'チェックリスト', link: 'リンク', table: '表' };
@@ -11,10 +11,40 @@ function Attachment({ block }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let active = true;
-    attachmentUrl(block.path).then((value) => { if (active) setUrl(value); }).catch(() => { if (active) setFailed(true); });
-    return () => { active = false; };
+    let request = 0;
+    let timer;
+    setUrl(null); setFailed(false);
+    const refresh = async () => {
+      const currentRequest = ++request;
+      clearTimeout(timer);
+      let delay = 60000;
+      try {
+        const value = await attachmentUrl(block.path);
+        if (!active || currentRequest !== request) return;
+        if (value) {
+          setUrl(value); setFailed(false);
+          // Renew with a five-minute margin; resume events also cover suspended tabs.
+          delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
+        }
+      } catch {
+        if (!active || currentRequest !== request) return;
+        setFailed(true);
+      }
+      if (active && currentRequest === request) timer = setTimeout(refresh, delay);
+    };
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    refresh();
+    window.addEventListener('online', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      active = false; clearTimeout(timer);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', visible);
+    };
   }, [block.path]);
-  if (!url) return <p className="attachment-placeholder"><FileText size={18} />{block.text}<small>{failed ? '添付を開けません。再度ページを開いてください。' : '添付はオンラインで開けます'}</small></p>;
+  if (!url) return <p className="attachment-placeholder"><FileText size={18} />{block.text}<small>{failed ? '添付を開けません。接続を確認してください。自動で再試行します。' : '添付はオンラインで開けます'}</small></p>;
   return block.type === 'image' ? <figure><a href={url} target="_blank" rel="noreferrer"><img src={url} alt={block.text || '添付画像'} loading="lazy" /></a><figcaption>{block.text}</figcaption></figure>
     : <a className="document-file" href={url} target="_blank" rel="noreferrer"><FileText size={22} /><span>{block.text}<small>PDFを開く</small></span><ChevronRight size={18} /></a>;
 }
@@ -60,7 +90,7 @@ export default function TravelReader({ trip, activity, onClose }) {
     loadDocuments(trip.id).then((list) => {
       if (!active) return;
       remember(list);
-      if (!dirtyRef.current) setDoc(list.find((d) => d.id === startId) || emptyDocument(startId, trip.id, activity?.title || '旅行ノート', activity?.id));
+      if (!dirtyRef.current) setDoc((current) => list.find((d) => d.id === current.id) || current);
     }).catch(() => { if (active) setMessage('端末に保存した情報を表示しています。ネット接続後、開き直すと最新の情報を取得できます。'); }).finally(() => { if (active) setLoading(false); });
     const onlineChange = () => setOffline(!navigator.onLine);
     window.addEventListener('online', onlineChange); window.addEventListener('offline', onlineChange);
@@ -89,6 +119,7 @@ export default function TravelReader({ trip, activity, onClose }) {
     return () => { if (root) root.inert = false; previous?.focus(); window.removeEventListener('keydown', key); window.removeEventListener('beforeunload', unload); };
   }, []);
   const change = (next) => {
+    dirtyRef.current = true;
     setDoc(next); setDirty(true);
     try { localStorage.setItem(draftKey(next.id), JSON.stringify(next)); } catch { setMessage('端末の保存容量が不足しています。ページを閉じる前にオンラインで保存してください。'); }
   };

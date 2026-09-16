@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 
 const cacheKey = (tripId) => `roam.documents.v1.${tripId}`;
+export const ATTACHMENT_URL_TTL_SECONDS = 3600;
 export const guideId = (tripId, activityId) => `guide:${tripId}:${activityId}`;
 export const notebookId = (tripId) => `notebook:${tripId}`;
 export const emptyDocument = (id, tripId, title, activityId = null, parentId = null) => ({
@@ -52,7 +53,7 @@ export async function uploadAttachment(tripId, file) {
 }
 export async function attachmentUrl(path) {
   if (!supabase || !navigator.onLine) return null;
-  const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, 3600);
+  const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, ATTACHMENT_URL_TTL_SECONDS);
   if (error) throw error;
   return data.signedUrl;
 }
