@@ -22,6 +22,14 @@ it('adds sources and appends safely when the user removed the source heading', (
   expect(next.blocks.at(-1)).toMatchObject({ type: 'link', url: 'https://example.com/' });
   expect(next.blocks[0]).toEqual(doc.blocks[0]);
 });
+it.each(['heading', 'text'])('preserves block edits after the generated %s is deleted', (deletedType) => {
+  const additions = [{ title: '歴史', text: '調査内容', sourceTitle: '公式', url: 'https://example.com/' }];
+  const applied = appendEnrichment({ activity_id: 'stop', blocks: [] }, additions);
+  const edited = { ...applied, blocks: applied.blocks.filter((b) => b.type !== deletedType)
+    .map((b) => b.type === 'link' ? b : { ...b, text: 'ユーザーによる編集' }) };
+  expect(appendEnrichment(edited, additions)).toEqual(edited);
+  expect(edited.blocks.filter((b) => b.type !== 'link')).toHaveLength(1);
+});
 it('targets existing guides and gives every researched addition an HTTPS source', () => {
   expect(Object.keys(enrichments)).toHaveLength(12);
   for (const [id, additions] of Object.entries(enrichments)) {

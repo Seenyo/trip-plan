@@ -23,7 +23,7 @@ export function appendEnrichment(document, additions) {
   const links = [];
   additions.forEach((addition, index) => {
     const prefix = `research.${enrichmentDate}.${document.activity_id}.${index}`;
-    if (!blocks.some((b) => b.id === `${prefix}.heading`)) {
+    if (!blocks.some((b) => b.id === `${prefix}.heading` || b.id === `${prefix}.text`)) {
       extra.push({ id: `${prefix}.heading`, type: 'heading', text: addition.title }, { id: `${prefix}.text`, type: 'text', text: addition.text });
     }
     if (!blocks.some((b) => b.type === 'link' && b.url === addition.url) && !links.some((b) => b.url === addition.url)) {
