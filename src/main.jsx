@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   ArrowLeft,
+  BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,8 @@ import { icelandTrip } from './icelandTrip';
 import { useSharedWorkspace } from './useSharedWorkspace';
 import './styles.css';
 import PlaceSearch from './PlaceSearch';
+import './offline';
+import './travelReader.css';
 import {
   formatTravelDistance,
   formatTravelDuration,
@@ -52,6 +55,8 @@ import {
   travelModeForActivity,
   travelTimesForRoutes,
 } from './itineraryUtils';
+
+const TravelReader = React.lazy(() => import('./TravelReader'));
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
@@ -417,7 +422,7 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete }) {
+function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete, onGuide }) {
   const {
     attributes,
     listeners,
@@ -461,12 +466,13 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         </div>
         <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
         {item.notes && <small>{item.notes}</small>}
+        <button className="guide-entry" onClick={() => onGuide(item)}><BookOpen size={14} />地点ガイド</button>
       </div>
     </article>
   );
 }
 
-function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder }) {
+function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -494,7 +500,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
         ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
             count={day.activities.length} travelTime={travelTimes[item.id]} varyRouteColors={varyRouteColors}
-            onEdit={onEdit} onDelete={onDelete} />)}
+            onEdit={onEdit} onDelete={onDelete} onGuide={onGuide} />)}
         </SortableContext>}
         {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
       </div>
@@ -509,7 +515,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
+function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide }) {
   const touch = useRef(null);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -569,7 +575,7 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
       <Timeline day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
-        onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} />
+        onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} />
     </section>
   );
 }
@@ -732,6 +738,7 @@ function App() {
   const [timelineOpen, setTimelineOpen] = useState(true);
   const [travelTimes, setTravelTimes] = useState({});
   const [modal, setModal] = useState(null);
+  const [reader, setReader] = useState(null);
   const trip = trips.find((item) => item.id === selectedId) || trips[0];
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
 
@@ -792,6 +799,7 @@ function App() {
             {railOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
+          <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><BookOpen size={20} /></button>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
           <button className="icon-button timeline-toggle" onClick={() => setTimelineOpen((open) => !open)}
             aria-label={timelineOpen ? '旅程を閉じる' : '旅程を開く'} title={timelineOpen ? '旅程を閉じる' : '旅程を開く'}>
@@ -808,7 +816,8 @@ function App() {
       <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
-      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} />
+      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })} />
+      {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
