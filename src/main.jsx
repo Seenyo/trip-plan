@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import {
@@ -50,6 +50,7 @@ import {
   routeTextColor,
   sortActivitiesByTime,
   travelModeForActivity,
+  travelTimesForRoutes,
 } from './itineraryUtils';
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -257,6 +258,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
               }
               let drivingRoutes = routes?.[0] ? [routes[0]] : [];
               let fallbackDestinationIndexes = [];
+              let missingLegs = [];
               if (!drivingRoutes.length) {
                 const legs = routePoints.slice(0, -1).map((origin, index) => ({
                   origin,
@@ -272,17 +274,19 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
                       polylineQuality: 'HIGH_QUALITY',
                       fields: ['path', 'durationMillis', 'distanceMeters'],
                     });
-                    return result.routes?.[0] || null;
+                    return { route: result.routes?.[0] || null, requestFailed: false };
                   } catch {
-                    return null;
+                    return { route: null, requestFailed: true };
                   }
                 }));
                 fallbackDestinationIndexes = legResults
-                  .map((route, index) => route ? index + 1 : null)
+                  .map(({ route }, index) => route ? index + 1 : null)
                   .filter((index) => index !== null);
-                drivingRoutes = legResults.filter(Boolean);
+                missingLegs = legResults.flatMap(({ route, requestFailed }, index) => route
+                  ? [] : [{ destinationIndex: index + 1, requestFailed }]);
+                drivingRoutes = legResults.flatMap(({ route }) => route ? [route] : []);
               }
-              return { drivingRoutes, fallbackDestinationIndexes };
+              return { drivingRoutes, fallbackDestinationIndexes, missingLegs };
             })();
             routeCache.current = { key: routeKey, promise: cachedRoute };
           }
@@ -293,36 +297,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
             if (routeCache.current?.promise === cachedRoute) routeCache.current = null;
             throw error;
           }
-          const { drivingRoutes, fallbackDestinationIndexes } = routeResult;
+          const { drivingRoutes, fallbackDestinationIndexes, missingLegs } = routeResult;
           if (!drivingRoutes.length && routeCache.current?.promise === cachedRoute) routeCache.current = null;
           if (cancelled) return;
-          if (!drivingRoutes.length) throw new Error('ルートが見つかりませんでした');
-          const travelTimes = {};
-          if (drivingRoutes.length === 1 && drivingRoutes[0].legs?.length) {
-            drivingRoutes[0].legs.forEach((leg, index) => {
-              const destination = routeStops[index + 1];
-              if (destination?.id && Number.isFinite(leg.durationMillis)) {
-                travelTimes[destination.id] = {
-                  durationMillis: leg.durationMillis,
-                  distanceMeters: leg.distanceMeters,
-                  fromPreviousDay: routeStops[index]?.fromPreviousDay || false,
-                  travelMode: destination.travelMode || 'DRIVING',
-                };
-              }
-            });
-          } else {
-            drivingRoutes.forEach((route, index) => {
-              const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
-              const destination = routeStops[destinationIndex];
-              if (destination?.id && Number.isFinite(route.durationMillis)) {
-                travelTimes[destination.id] = {
-                  durationMillis: route.durationMillis,
-                  distanceMeters: route.distanceMeters,
-                  fromPreviousDay: routeStops[destinationIndex - 1]?.fromPreviousDay || false,
-                  travelMode: destination.travelMode || 'DRIVING',
-                };
-              }
-            });
+          const travelTimes = travelTimesForRoutes(routeStops, drivingRoutes, fallbackDestinationIndexes, missingLegs);
+          if (!drivingRoutes.length) {
+            onTravelTimesChange(travelTimes);
+            throw new Error('ルートが見つかりませんでした');
           }
           onTravelTimesChange(travelTimes);
           const polylineOptions = (strokeColor, zIndex = 2) => ({ strokeColor, strokeOpacity: 1, strokeWeight: 5, zIndex });
@@ -353,7 +334,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
             overlays.current.push(routeLine);
           });
           if (drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
-          setRouteStatus('ready');
+          setRouteStatus(missingLegs.length ? 'partial' : 'ready');
         } catch (error) {
           if (cancelled) return;
           console.warn('ルートを表示できませんでした。', error);
@@ -412,6 +393,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       {mapStatus === 'error' && accessCard(true)}
       {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">ルートを検索しています…</span>}
       {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">ルートを表示できません</span>}
+      {mapStatus === 'ready' && routeStatus === 'partial' && <span className="map-route-note">一部の移動ルートを計算できません</span>}
     </div>
   );
 }
@@ -457,9 +439,12 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         {index < count - 1 && <span className="stop-rule" />}
       </div>
       <div className="stop-copy">
-        {travelTime && <div className={`travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'}`}>
-          <strong>{travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}で{formatTravelDuration(travelTime.durationMillis)}</strong>
-          {formatTravelDistance(travelTime.distanceMeters)
+        {travelTime && <div className={`travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}
+          title={travelTime.unavailable ? 'この地点までの移動ルートを計算できません。地点や移動手段を確認してください。' : undefined}>
+          <strong>{travelTime.unavailable
+            ? `${travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}の${travelTime.requestFailed ? 'ルートを取得できません' : 'ルートなし'}`
+            : `${travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}で${formatTravelDuration(travelTime.durationMillis)}`}</strong>
+          {!travelTime.unavailable && formatTravelDistance(travelTime.distanceMeters)
             && <small>· {formatTravelDistance(travelTime.distanceMeters)}</small>}
         </div>}
         <div className="stop-heading">
@@ -527,6 +512,25 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
 function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay }) {
   const touch = useRef(null);
   const sheet = useRef(null);
+  const handle = useRef(null);
+  const mobileDays = useRef(null);
+  useLayoutEffect(() => {
+    const updatePeekHeight = () => {
+      if (sheet.current && handle.current && mobileDays.current) {
+        const height = handle.current.offsetHeight + mobileDays.current.offsetHeight;
+        sheet.current.style.setProperty('--sheet-peek-height', `${height}px`);
+      }
+    };
+    updatePeekHeight();
+    if (!window.ResizeObserver) {
+      window.addEventListener('resize', updatePeekHeight);
+      return () => window.removeEventListener('resize', updatePeekHeight);
+    }
+    const observer = new ResizeObserver(updatePeekHeight);
+    observer.observe(handle.current);
+    observer.observe(mobileDays.current);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!open && sheet.current) sheet.current.scrollTop = 0;
   }, [open]);
@@ -549,8 +553,8 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
   };
   return (
     <section ref={sheet} className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
-      <button className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? '旅程を閉じる' : '旅程を開く'}><span className="sheet-handle" /></button>
-      <div className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
+      <button ref={handle} className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? '旅程を閉じる' : '旅程を開く'}><span className="sheet-handle" /></button>
+      <div ref={mobileDays} className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
       <div className="sheet-title-row">
         <div>
           <span className="eyebrow">{dayIndex + 1}日目 · {formatDay(day.date)}</span>

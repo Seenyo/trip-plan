@@ -29,6 +29,35 @@ export const routeColorForIndex = (index, varyByPoint = false) => varyByPoint
 
 export const travelModeForActivity = (activity) => activity?.travelMode === 'WALKING' ? 'WALKING' : 'DRIVING';
 
+export const travelTimesForRoutes = (stops, routes, fallbackDestinationIndexes, missingLegs) => {
+  const travelTimes = Object.fromEntries(missingLegs.flatMap(({ destinationIndex, requestFailed }) => {
+    const destination = stops[destinationIndex];
+    return destination?.id ? [[destination.id, {
+      unavailable: true,
+      requestFailed,
+      travelMode: destination.travelMode || 'DRIVING',
+    }]] : [];
+  }));
+  const addTravelTime = (destinationIndex, durationMillis, distanceMeters) => {
+    const destination = stops[destinationIndex];
+    if (!destination?.id || !Number.isFinite(durationMillis)) return;
+    travelTimes[destination.id] = {
+      durationMillis,
+      distanceMeters,
+      fromPreviousDay: stops[destinationIndex - 1]?.fromPreviousDay || false,
+      travelMode: destination.travelMode || 'DRIVING',
+    };
+  };
+  if (fallbackDestinationIndexes.length === 0 && routes.length === 1 && routes[0].legs?.length) {
+    routes[0].legs.forEach((leg, index) => addTravelTime(index + 1, leg.durationMillis, leg.distanceMeters));
+  } else {
+    routes.forEach((route, index) => addTravelTime(
+      fallbackDestinationIndexes[index] ?? index + 1, route.durationMillis, route.distanceMeters,
+    ));
+  }
+  return travelTimes;
+};
+
 const relativeLuminance = (hexColor) => {
   const channels = hexColor.match(/[\da-f]{2}/gi)?.map((channel) => {
     const value = Number.parseInt(channel, 16) / 255;
