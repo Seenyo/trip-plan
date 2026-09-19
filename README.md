@@ -62,4 +62,11 @@ node scripts/enrich-travel-guides.mjs         # preview researched additions to 
 node scripts/enrich-travel-guides.mjs --write # append once, preserving edits; backs up first and checks revisions
 ```
 
+The one-time September 20/21 itinerary correction is reproducible and revision checked:
+
+```bash
+node scripts/apply-domestic-day-swap.mjs         # preview only
+node scripts/apply-domestic-day-swap.mjs --write # back up, swap, save and verify
+```
+
 The initial seed covers all 100 activities in the two saved trips, including transport and unspecified stops. Unknown facility/booking details are marked for confirmation; prices and availability are not promised. New stops start with an empty editable guide.
