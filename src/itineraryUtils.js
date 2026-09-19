@@ -7,6 +7,15 @@ export const sortActivitiesByTime = (activities) => activities
   })
   .map(({ activity }) => activity);
 
+export const sortTripsByStartDate = (trips) => trips
+  .map((trip, index) => ({ trip, index }))
+  .sort((a, b) => {
+    const aDate = /^\d{4}-\d{2}-\d{2}$/.test(a.trip.startDate || '') ? a.trip.startDate : '9999-12-31';
+    const bDate = /^\d{4}-\d{2}-\d{2}$/.test(b.trip.startDate || '') ? b.trip.startDate : '9999-12-31';
+    return aDate.localeCompare(bDate) || a.index - b.index;
+  })
+  .map(({ trip }) => trip);
+
 export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) => {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0
     || fromIndex >= activities.length || toIndex >= activities.length) return activities;

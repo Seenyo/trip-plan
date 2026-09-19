@@ -52,6 +52,7 @@ import {
   routeColorForIndex,
   routeTextColor,
   sortActivitiesByTime,
+  sortTripsByStartDate,
   travelModeForActivity,
   travelTimesForRoutes,
 } from './itineraryUtils';
@@ -60,7 +61,7 @@ const TravelReader = React.lazy(() => import('./TravelReader'));
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
-const seedTrips = [icelandTrip, domesticTrip];
+const seedTrips = sortTripsByStartDate([icelandTrip, domesticTrip]);
 const migrateTrips = () => {
   try {
     const previous = JSON.parse(localStorage.getItem('roam.trips.v2') || '[]');
@@ -731,7 +732,8 @@ function App() {
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
   const apiKey = bundledApiKey;
-  const [selectedId, setSelectedId] = useState(trips[0]?.id);
+  const sortedTrips = useMemo(() => sortTripsByStartDate(trips), [trips]);
+  const [selectedId, setSelectedId] = useState(() => sortTripsByStartDate(trips)[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -739,7 +741,7 @@ function App() {
   const [travelTimes, setTravelTimes] = useState({});
   const [modal, setModal] = useState(null);
   const [reader, setReader] = useState(null);
-  const trip = trips.find((item) => item.id === selectedId) || trips[0];
+  const trip = trips.find((item) => item.id === selectedId) || sortedTrips[0];
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
 
   const updateTrip = useCallback((updater) => {
@@ -790,7 +792,7 @@ function App() {
 
   return (
     <main className={`app-shell ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
-      <TripRail trips={trips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
+      <TripRail trips={sortedTrips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
       {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="旅行一覧を閉じる" />}
       <section className="map-stage">
         <header className="topbar">

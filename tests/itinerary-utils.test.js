@@ -7,6 +7,7 @@ import {
   routeColorForIndex,
   routeTextColor,
   sortActivitiesByTime,
+  sortTripsByStartDate,
   travelModeForActivity,
   travelTimesForRoutes,
 } from '../src/itineraryUtils';
@@ -19,6 +20,17 @@ describe('itinerary helpers', () => {
       { id: 'museum', time: '09:30' },
     ];
     expect(sortActivitiesByTime(activities).map((item) => item.id)).toEqual(['museum', 'lunch', 'unscheduled']);
+  });
+
+  it('shows trips in start-date order and leaves undated trips last', () => {
+    const trips = [
+      { id: 'iceland', startDate: '2026-10-05' },
+      { id: 'undated', startDate: '' },
+      { id: 'oki', startDate: '2026-09-19' },
+      { id: 'also-undated' },
+    ];
+    expect(sortTripsByStartDate(trips).map((trip) => trip.id)).toEqual(['oki', 'iceland', 'undated', 'also-undated']);
+    expect(trips.map((trip) => trip.id)).toEqual(['iceland', 'undated', 'oki', 'also-undated']);
   });
 
   it('formats travel estimates for the itinerary', () => {
