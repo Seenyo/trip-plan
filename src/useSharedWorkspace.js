@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { isSupabaseConfigured, loadSharedWorkspace, saveSharedWorkspace } from './supabase';
+import { migrateTripsForCurrentApp } from './tripMigrations';
 
 const TRIPS_KEY = 'roam.trips.v3';
 
@@ -13,7 +14,7 @@ const readJson = (key, fallback) => {
 };
 
 export function useSharedWorkspace(initialTrips) {
-  const [trips, setTrips] = useState(() => readJson(TRIPS_KEY, initialTrips));
+  const [trips, setTrips] = useState(() => migrateTripsForCurrentApp(readJson(TRIPS_KEY, initialTrips)));
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'loading' : 'local');
   const [ready, setReady] = useState(!isSupabaseConfigured);
   const revisionRef = useRef(0);
@@ -36,7 +37,7 @@ export function useSharedWorkspace(initialTrips) {
         if (cancelled) return;
         if (!remote) throw new Error('共有ワークスペースが見つかりません。');
         revisionRef.current = remote.revision || 0;
-        const remoteTrips = Array.isArray(remote.trips) && remote.trips.length ? remote.trips : trips;
+        const remoteTrips = migrateTripsForCurrentApp(Array.isArray(remote.trips) && remote.trips.length ? remote.trips : trips);
         // Only the remote payload is saved; local fallback seeds still need a write.
         savedSnapshotRef.current = JSON.stringify(remote.trips);
         setTrips(remoteTrips);

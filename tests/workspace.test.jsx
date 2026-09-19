@@ -4,6 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useSharedWorkspace } from '../src/useSharedWorkspace';
 import { loadSharedWorkspace, saveSharedWorkspace } from '../src/supabase';
+import { TO_SEPTEMBER_20, TO_SEPTEMBER_21 } from '../src/tripMigrations';
 
 vi.mock('../src/supabase', () => ({
   isSupabaseConfigured: true,
@@ -33,6 +34,19 @@ it('keeps failed loads local and does not try saving over unread cloud data', as
   await act(() => vi.advanceTimersByTimeAsync(2000));
   expect(result.current.syncStatus).toBe('error');
   expect(JSON.parse(localStorage.getItem('roam.trips.v3'))).toEqual([{ id: 'edited-locally' }]);
+  expect(saveSharedWorkspace).not.toHaveBeenCalled();
+});
+
+it('migrates the corrected sightseeing days from v3 browser storage', async () => {
+  loadSharedWorkspace.mockRejectedValue(new Error('offline'));
+  const activity = (id) => ({ id, time: '10:00' });
+  localStorage.setItem('roam.trips.v3', JSON.stringify([{ id: 'silver-week-oki-chugoku-2026', days: [
+    { id: '20', date: '2026-09-20', activities: [...TO_SEPTEMBER_21.map(activity), activity('late-20')] },
+    { id: '21', date: '2026-09-21', activities: [...TO_SEPTEMBER_20.map(activity), activity('domestic-car-return')] },
+  ] }]));
+  const { result } = await mount();
+  expect(result.current.trips[0].days[0].activities.map((item) => item.id)).toEqual(['late-20', ...TO_SEPTEMBER_20]);
+  expect(result.current.trips[0].days[1].activities.map((item) => item.id)).toEqual([...TO_SEPTEMBER_21, 'domestic-car-return']);
   expect(saveSharedWorkspace).not.toHaveBeenCalled();
 });
 

@@ -41,6 +41,7 @@ import {
 import { domesticTrip } from './domesticTrip';
 import { icelandTrip } from './icelandTrip';
 import { useSharedWorkspace } from './useSharedWorkspace';
+import { migrateTripsForCurrentApp } from './tripMigrations';
 import './styles.css';
 import PlaceSearch from './PlaceSearch';
 import './offline';
@@ -68,7 +69,7 @@ const migrateTrips = () => {
     if (Array.isArray(previous) && previous.length) {
       const retained = previous.filter((trip) => !['tokyo-weekender', 'setouchi-notes'].includes(trip.id));
       const withIceland = retained.some((trip) => trip.id === icelandTrip.id) ? retained : [icelandTrip, ...retained];
-      return withIceland.some((trip) => trip.id === domesticTrip.id) ? withIceland : [...withIceland, domesticTrip];
+      return migrateTripsForCurrentApp(withIceland.some((trip) => trip.id === domesticTrip.id) ? withIceland : [...withIceland, domesticTrip]);
     }
   } catch { /* fall through to the current built-in trips */ }
   return seedTrips;
