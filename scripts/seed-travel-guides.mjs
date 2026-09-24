@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { loadEnv } from 'vite';
 import { guides, notebooks, checkedAt } from './guide-content.mjs';
 import { appendEnrichment, enrichments } from './guide-enrichment.mjs';
+import { appendReviewTrends, reviewTrends } from './review-trend-enrichment.mjs';
 import { appendHotelDetails, hotelResearchDate, icelandHotelDetails } from './iceland-hotel-details.mjs';
 const env = loadEnv('development', '.', '');
 const client = createClient(process.env.SUPABASE_URL || env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
@@ -23,6 +24,7 @@ for (const trip of workspace.trips.filter((t) => notebooks[t.id])) {
     if (!guides[activity.id]) { missing.push(activity.title); continue; }
     let row = { id: `guide:${trip.id}:${activity.id}`, trip_id: trip.id, activity_id: activity.id, title: activity.title, blocks: blocks(guides[activity.id]), checked_at: checkedAt };
     if (enrichments[activity.id]) row = appendEnrichment(row, enrichments[activity.id]);
+    if (reviewTrends[activity.id]) row = appendReviewTrends(row, reviewTrends[activity.id]);
     if (icelandHotelDetails[activity.id]) row = { ...appendHotelDetails(row, icelandHotelDetails[activity.id]), checked_at: hotelResearchDate };
     rows.push(row);
   }
