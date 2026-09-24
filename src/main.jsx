@@ -217,7 +217,7 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
   </article>;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide }) {
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide, viewportMode }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -594,7 +594,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors]);
+  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors, viewportMode]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -1207,7 +1207,7 @@ function App() {
         <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
           varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
-          onGuide={(activity) => setReader({ trip, activity })} />
+          onGuide={(activity) => setReader({ trip, activity })} viewportMode={sheetStage === 'half' ? 'half' : 'full'} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
         {offlineSave.tripId === trip.id && offlineSave.message && <div className={`offline-save-status is-${offlineSave.status}`} role="status">
