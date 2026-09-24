@@ -186,6 +186,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
   const overlays = useRef([]);
   const routeCache = useRef(null);
   const bonusCache = useRef(new Map());
+  const handledFocusRequest = useRef(null);
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
   const [routeStatus, setRouteStatus] = useState('idle');
   const [selection, setSelection] = useState(null);
@@ -224,11 +225,21 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
     return () => observer.disconnect();
   }, [mapStatus]);
 
+  const resolvedSelection = selection?.type === 'activity'
+    ? (() => {
+      const item = day.activities.find((activity) => activity.id === selection.activityId);
+      return item ? { ...selection, item } : null;
+    })()
+    : selection;
+
   useEffect(() => setSelection(null), [day.id]);
   useEffect(() => {
-    const focused = day.activities.find((activity) => activity.id === focusRequest?.activityId);
-    if (focused) setSelection({ type: 'activity', item: focused });
-  }, [day.activities, focusRequest]);
+    if (!focusRequest?.requestId || handledFocusRequest.current === focusRequest.requestId) return;
+    const focused = day.activities.find((activity) => activity.id === focusRequest.activityId);
+    if (!focused) return;
+    handledFocusRequest.current = focusRequest.requestId;
+    setSelection({ type: 'activity', activityId: focused.id });
+  }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.requestId]);
 
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
@@ -289,7 +300,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
     mappedStops.forEach(({ item, index }) => {
       const color = routeColorForIndex(index, varyRouteColors);
       const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
-        () => setSelection({ type: 'activity', item }));
+        () => setSelection({ type: 'activity', activityId: item.id }));
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
@@ -464,12 +475,12 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
             className={`map-pin pin-${index + 1}`}
             key={item.id}
             style={{ '--pin-color': index === 0 ? '#FF5722' : '#303841' }}
-            onClick={() => setSelection({ type: 'activity', item })}
+            onClick={() => setSelection({ type: 'activity', activityId: item.id })}
             aria-label={item.title}
           >{index + 1}</button>
         ))}
         {accessCard()}
-        <MapDetailCard selection={selection} onClose={() => setSelection(null)} onGuide={onGuide} />
+        <MapDetailCard selection={resolvedSelection} onClose={() => setSelection(null)} onGuide={onGuide} />
       </div>
     );
   }
@@ -481,7 +492,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">ルートを検索しています…</span>}
       {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">ルートを表示できません</span>}
       {mapStatus === 'ready' && routeStatus === 'partial' && <span className="map-route-note">一部の移動ルートを計算できません</span>}
-      <MapDetailCard selection={selection} onClose={() => setSelection(null)} onGuide={onGuide} />
+      <MapDetailCard selection={resolvedSelection} onClose={() => setSelection(null)} onGuide={onGuide} />
     </div>
   );
 }

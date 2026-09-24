@@ -8,6 +8,8 @@ export default function PlanImage({ image, className = '', eager = false }) {
   const alt = typeof image === 'string' ? '予定の写真' : image?.alt || '予定の写真';
 
   useEffect(() => {
+    setUrl(null);
+    setFailed(false);
     if (!path) return undefined;
     let active = true;
     let timer;
