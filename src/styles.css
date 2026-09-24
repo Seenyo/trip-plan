@@ -66,6 +66,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .icon-button.subtle { background: var(--soft); border-color: transparent; }
 .icon-button:disabled { cursor: default; opacity: .46; }
 .offline-save-button.is-saved { color: #3c7b5d; background: rgba(130,185,138,.16); border-color: rgba(130,185,138,.3); }
+.offline-save-button.is-partial { color: #9a641d; background: rgba(255,173,66,.15); border-color: rgba(255,173,66,.38); }
 .offline-save-spinner, .location-spinner { animation: search-spin 1s linear infinite; }
 .rail-toggle { display: grid; }
 .google-map-shell, .google-map, .map-fallback { width: 100%; height: 100%; position: relative; }
@@ -96,6 +97,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .map-hint { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 5px; padding: 7px 10px; border-radius: 18px; color: var(--muted); background: rgba(245,245,245,.88); font-size: 9px; font-weight: 600; box-shadow: 0 4px 14px rgba(48,56,65,.08); white-space: nowrap; }
 .offline-save-status { position: absolute; z-index: 8; top: 165px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: rgba(252,252,250,.97); box-shadow: var(--shadow); font-size: 9px; font-weight: 700; white-space: nowrap; }
 .offline-save-status.is-saved { color: #32694f; border-color: rgba(130,185,138,.35); }
+.offline-save-status.is-partial { color: #855719; border-color: rgba(255,173,66,.42); }
 .offline-save-status.is-error { color: #a6402e; }
 .desktop-day-strip { position: absolute; z-index: 6; left: 18px; right: 18px; bottom: 58px; }
 .day-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 3px; }

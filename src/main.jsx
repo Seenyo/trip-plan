@@ -23,6 +23,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
   CirclePlus,
   Download,
   ExternalLink,
@@ -56,7 +57,7 @@ import PlanImage from './PlanImage';
 import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
-import { offlineTripManifest, saveTripOffline } from './offlineTrip';
+import { isOfflineTripComplete, offlineTripManifest, saveTripOffline } from './offlineTrip';
 import { splitOverlappingRouteLegs } from './routePresentation';
 import { uploadPlanImage } from './travelDocuments';
 import {
@@ -1128,11 +1129,18 @@ function App() {
     setOfflineSave({ tripId: trip.id, status: 'saving', message: 'オフライン保存を準備しています…' });
     try {
       const saved = await saveTripOffline(trip, (message) => setOfflineSave({ tripId: trip.id, status: 'saving', message }));
-      const complete = saved.documentsFresh && saved.mediaSaved === saved.mediaTotal;
+      const complete = isOfflineTripComplete(saved);
+      const missing = [
+        !saved.shellReady && 'アプリ本体',
+        !saved.documentsFresh && '最新のガイド',
+        saved.mediaSaved !== saved.mediaTotal && `画像・添付（${saved.mediaSaved}/${saved.mediaTotal}件）`,
+      ].filter(Boolean);
       setOfflineSave({
         tripId: trip.id,
         status: complete ? 'saved' : 'partial',
-        message: complete ? 'この旅行を端末に保存しました' : `旅程を保存しました（添付 ${saved.mediaSaved}/${saved.mediaTotal}件）`,
+        message: complete
+          ? 'この旅行を端末に保存しました'
+          : `旅程データは保存しましたが、${missing.join('・')}を保存できませんでした。オンラインで再度お試しください`,
       });
     } catch (error) {
       setOfflineSave({ tripId: trip.id, status: 'error', message: error.message || 'オフライン保存に失敗しました' });
@@ -1143,6 +1151,13 @@ function App() {
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
 
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
+
+  const storedOfflineManifest = offlineTripManifest(trip.id);
+  const offlineComplete = isOfflineTripComplete(storedOfflineManifest);
+  const offlinePartial = Boolean(storedOfflineManifest) && !offlineComplete;
+  const offlineButtonLabel = offlineComplete
+    ? 'オフライン保存済み。もう一度保存'
+    : offlinePartial ? 'オフライン保存を完了する' : 'この旅行をオフライン保存';
 
   return (
     <main className={`app-shell ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
@@ -1156,13 +1171,12 @@ function App() {
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
           <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><BookOpen size={20} /></button>
-          <button className={`icon-button offline-save-button ${offlineTripManifest(trip.id) || offlineSave.status === 'saved' ? 'is-saved' : ''}`}
+          <button className={`icon-button offline-save-button ${offlineComplete ? 'is-saved' : offlinePartial ? 'is-partial' : ''}`}
             onClick={saveCurrentTripOffline} disabled={!online || offlineSave.status === 'saving'}
-            aria-label="この旅行をオフライン保存" title={online ? 'この旅行をオフライン保存' : 'オンライン時に保存できます'}>
+            aria-label={offlineButtonLabel} title={online ? offlineButtonLabel : 'オンライン時に保存できます'}>
             {offlineSave.status === 'saving' && offlineSave.tripId === trip.id
               ? <LoaderCircle className="offline-save-spinner" size={19} />
-              : offlineTripManifest(trip.id) || (offlineSave.tripId === trip.id && offlineSave.status === 'saved')
-                ? <Check size={19} /> : <Download size={19} />}
+              : offlineComplete ? <Check size={19} /> : offlinePartial ? <CircleAlert size={19} /> : <Download size={19} />}
           </button>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
           <button className="icon-button timeline-toggle" onClick={() => setTimelineOpen((open) => !open)}

@@ -8,6 +8,16 @@ export function offlineTripManifest(tripId) {
   try { return JSON.parse(localStorage.getItem(manifestKey(tripId)) || 'null'); } catch { return null; }
 }
 
+export function isOfflineTripComplete(manifest) {
+  return Boolean(
+    manifest?.shellReady
+    && manifest.documentsFresh
+    && Number.isInteger(manifest.mediaTotal)
+    && Number.isInteger(manifest.mediaSaved)
+    && manifest.mediaSaved === manifest.mediaTotal
+  );
+}
+
 export function offlineTripSnapshots() {
   const prefix = 'roam.offlineTrip.v1.';
   return Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
