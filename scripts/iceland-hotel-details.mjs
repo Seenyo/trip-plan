@@ -224,7 +224,9 @@ icelandHotelDetails['iceland-reykjavik-stay-two'] = {
 
 export function appendHotelDetails(document, details) {
   const prefix = `hotel.${hotelResearchDate}.${document.activity_id}`;
-  const blocks = document.blocks.filter((block) => !block.id?.startsWith(prefix));
+  const escapedActivityId = document.activity_id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const generatedBlockPattern = new RegExp(`^hotel\\.\\d{4}-\\d{2}-\\d{2}\\.${escapedActivityId}\\.`);
+  const blocks = document.blocks.filter((block) => !generatedBlockPattern.test(block.id ?? ''));
   const additions = [
     { id: `${prefix}.heading`, type: 'heading', text: '今回泊まる部屋・設備' },
     { id: `${prefix}.summary`, type: 'table', text: '', rows: [['項目', '内容'], ...details.rows] },
