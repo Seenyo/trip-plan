@@ -51,6 +51,11 @@ export async function uploadAttachment(tripId, file) {
   if (error) throw error;
   return { ...newBlock(file.type === 'application/pdf' ? 'file' : 'image'), path, text: file.name };
 }
+export async function uploadPlanImage(tripId, file) {
+  if (!file.type.startsWith('image/')) throw new Error('予定には画像ファイルを追加してください。');
+  const block = await uploadAttachment(tripId, file);
+  return { id: block.id, path: block.path, alt: file.name };
+}
 export async function attachmentUrl(path) {
   if (!supabase || !navigator.onLine) return null;
   const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, ATTACHMENT_URL_TTL_SECONDS);

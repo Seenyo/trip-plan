@@ -4,7 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 const backend = vi.hoisted(() => ({ from: vi.fn(), storage: { from: vi.fn() } }));
 vi.mock('../src/supabase', () => ({ supabase: backend }));
-import { ATTACHMENT_URL_TTL_SECONDS, cacheDocuments, cachedDocuments, safeLink, saveDocument, uploadAttachment } from '../src/travelDocuments';
+import { ATTACHMENT_URL_TTL_SECONDS, cacheDocuments, cachedDocuments, safeLink, saveDocument, uploadAttachment, uploadPlanImage } from '../src/travelDocuments';
+import PlanImage from '../src/PlanImage';
 import TravelReader from '../src/TravelReader';
 const doc = { id: 'notebook:trip', trip_id: 'trip', title: '旅のメモ', revision: 1, blocks: [{ id: 'check', type: 'checklist', items: [{ text: '船の予約', checked: false }] }] };
 const trip = { id: 'trip', title: '隠岐の旅' };
@@ -62,6 +63,30 @@ it('rejects active-content links and oversized or unsupported attachments', asyn
   await expect(uploadAttachment('trip', { type: 'application/pdf', size: 11 * 1024 * 1024 })).rejects.toThrow('10MB');
   await expect(uploadAttachment('trip', { type: 'text/html', size: 100 })).rejects.toThrow('画像');
   expect(backend.storage.from).not.toHaveBeenCalled();
+});
+it('uploads plan photos to the existing private trip attachment folder', async () => {
+  const upload = vi.fn().mockResolvedValue({ error: null });
+  backend.storage.from.mockReturnValue({ upload });
+  const image = new File(['photo'], 'waterfall.jpg', { type: 'image/jpeg' });
+  const saved = await uploadPlanImage('iceland', image);
+  expect(backend.storage.from).toHaveBeenCalledWith('travel-attachments');
+  expect(upload).toHaveBeenCalledWith(expect.stringMatching(/^iceland\/[\w-]+\.jpg$/), image, {
+    contentType: 'image/jpeg', upsert: false,
+  });
+  expect(saved).toMatchObject({ path: expect.stringMatching(/^iceland\/.+\.jpg$/), alt: 'waterfall.jpg' });
+});
+it('removes the previous plan photo while a different photo is being signed', async () => {
+  let rejectNext;
+  const sign = vi.fn((path) => path === 'trip/first.jpg'
+    ? Promise.resolve({ data: { signedUrl: 'https://example.com/first.jpg' }, error: null })
+    : new Promise((resolve, reject) => { rejectNext = reject; }));
+  backend.storage.from.mockReturnValue({ createSignedUrl: sign });
+  const { rerender } = render(<PlanImage image={{ path: 'trip/first.jpg', alt: '最初の写真' }} />);
+  expect((await screen.findByRole('img', { name: '最初の写真' })).src).toBe('https://example.com/first.jpg');
+  rerender(<PlanImage image={{ path: 'trip/second.jpg', alt: '次の写真' }} />);
+  await waitFor(() => expect(screen.queryByRole('img')).toBeNull());
+  await act(async () => rejectNext(new Error('signing failed')));
+  expect(screen.getByLabelText('写真を読み込めません')).toBeTruthy();
 });
 it('creates a nested page with its persisted parent and opens its editor', async () => {
   const child = { ...doc, id: 'child', parent_id: doc.id, title: '新しいページ', blocks: [], revision: 1 };
