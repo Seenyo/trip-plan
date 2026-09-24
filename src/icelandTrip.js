@@ -34,7 +34,7 @@ export const icelandTrip = {
         activity('iceland-car-pickup', '09:00', 'レンタカー受取', 'ケプラヴィーク国際空港 レンタカーセンター', '車体チェック、保険・燃料ルール・緊急連絡先を確認。', 63.9850119, -22.6266959),
         activity('iceland-supplies', '10:00', '物資調達', 'ケプラヴィーク周辺', '水、朝食、軽食などを購入。', 63.9997694, -22.5565373),
         activity('iceland-golden-circle', '11:30', 'ゴールデンサークルへ移動＆観光', 'ゴールデンサークル', '到着日の体力に合わせて無理なく巡る。', 64.3138382, -20.2995104),
-        activity('iceland-efra-sel', '18:00', 'Efra-Sel hostel チェックイン', 'Efra-Sel hostel, 846 フルージル, アイスランド', '洗濯機・キッチンあり。', 64.1403636, -20.3602311),
+        activity('iceland-efra-sel', '18:00', 'Efra-Sel Hostel', 'Efra-Sel hostel, 846 フルージル, アイスランド', 'エコノミーツイン（シングル2台・共用バスルーム）。共用キッチンと洗濯機あり。', 64.1403636, -20.3602311),
       ],
     },
     {
@@ -48,7 +48,7 @@ export const icelandTrip = {
         activity('iceland-skogafoss', '12:30', 'スコゥガフォスの滝', 'スコゥガフォス, アイスランド', '階段を上る場合は時間と体力に余裕を。', 63.5321038, -19.511292),
         activity('iceland-reynisfjara', '15:00', 'ブラックサンドビーチ', 'レイニスフィヤラ・ブラックサンドビーチ', 'スニーカウェーブに注意し、海から十分距離を取る。', 63.4044262, -19.0587987),
         activity('iceland-vik-shopping', '17:00', 'ヴィーク観光＆買い出し', 'ヴィーク, アイスランド', '翌日分の食料・飲み物も補給。', 63.4188166, -19.0054737),
-        activity('iceland-vik-stay', '19:00', 'ヴィークの宿にチェックイン', 'Víkurbraut 24a, 870 ヴィーク, アイスランド', '宿泊。', 63.4179299, -19.0130406),
+        activity('iceland-vik-stay', '19:00', '1908 Hostel by Tröll', 'Víkurbraut 24a, 870 ヴィーク, アイスランド', 'ベーシックツイン（シングル2台・共用バスルーム）。共用キッチンあり、館内ランドリーなし。', 63.4179299, -19.0130406),
       ],
     },
     {
@@ -60,7 +60,7 @@ export const icelandTrip = {
         activity('iceland-katla-tour', '09:00', 'カトラ火山体験ツアー', 'ヴィーク, アイスランド', '09:00–12:00（3時間）／大人2名／75,487 JPY。持ち物：暖かい服装、レインウェア、ハイキングブーツ、軽食や飲み物。', 63.4188166, -19.0054737),
         activity('iceland-vatnajokull', '12:30', 'ヴァトナヨークトル国立公園へ移動', 'ヴァトナヨークトル国立公園', '移動約2.5時間。', 64.0166723, -16.9663262),
         activity('iceland-diamond-beach', '15:30', 'ダイヤモンドビーチ', 'ダイヤモンドビーチ, アイスランド', '夕方の光と潮の状況を見ながら散策。', 64.0431419, -16.178248),
-        activity('iceland-hali-stay', '19:00', 'Haliの宿にチェックイン', 'Hali, 781 ハーリ, アイスランド', '宿泊。', 64.129209, -16.015219),
+        activity('iceland-hali-stay', '19:00', 'Skyrhúsið Guesthouse', 'Hali, 781 ハーリ, アイスランド', 'ツイン（シングル2台のリクエスト承認済み・共用バスルーム）。共用キッチンあり。', 64.129209, -16.015219),
       ],
     },
     {
@@ -71,7 +71,7 @@ export const icelandTrip = {
       activities: [
         activity('iceland-ice-cave', '09:00', 'アイスケーヴツアー', 'ヨークルスアゥルロゥン氷河湖', '09:00–12:00（3時間）／大人2名／55,912 JPY。持ち物：暖かく防水性のある服、ハイキングに適した靴、カメラまたはスマホ。', 64.0783208, -16.2274213),
         activity('iceland-zodiac', '15:50', 'ゾディアックボートツアー', 'ヨークルスアゥルロゥン氷河湖', '15:50–17:05（1時間15分）／大人2名／42,478 JPY。持ち物：サングラス、カメラ、歩きやすい靴、雨風に耐えられる暖かい服。', 64.0783208, -16.2274213),
-        activity('iceland-hofn-stay', '18:30', 'ヘプンの宿にチェックイン', 'Hafnarbraut 11, 780 ヘプン, アイスランド', '宿泊。', 64.2506397, -15.2074112),
+        activity('iceland-hofn-stay', '18:30', 'Central Stay Höfn', 'Hafnarbraut 11, 780 ヘプン, アイスランド', 'ダブルまたはツイン（専用バスルーム）。室内はコーヒーメーカーと電気ポットのみで自炊設備なし。', 64.2506397, -15.2074112),
       ],
     },
     {
@@ -82,7 +82,7 @@ export const icelandTrip = {
       activities: [
         activity('iceland-vestrahorn', '08:30', 'ヘプン観光＆ヴェストラホルン山', 'ヴェストラホルン, アイスランド', '午前中にヘプン周辺と山の景観を楽しむ。', 64.27605, -14.94975),
         activity('iceland-egilsstadir', '11:30', '東フィヨルドへ移動', 'エイイルススタジル, アイスランド', '途中でエイイルススタジルに寄る。合計移動約4時間。', 65.2620412, -14.4035258),
-        activity('iceland-borgarfjordur-stay', '17:00', 'ボルガルフィヨルズルの宿にチェックイン', 'Gamla Frystihusid, 720 ボルガルフィヨルズル・ユストゥリ, アイスランド', '宿泊。', 65.5278997, -13.8160478),
+        activity('iceland-borgarfjordur-stay', '17:00', 'Blábjörg Resort', 'Gamla Frystihusid, 720 ボルガルフィヨルズル・ユストゥリ, アイスランド', 'デラックスダブル（160cmベッド・専用バスルーム・海側バルコニー）。朝食込み。', 65.5278997, -13.8160478),
       ],
     },
     {
@@ -92,7 +92,7 @@ export const icelandTrip = {
       note: '北東部へ長距離移動。観光よりも安全運転と休憩を優先。',
       activities: [
         activity('iceland-diamond-circle-drive', '09:00', 'ダイヤモンドサークル方面へ移動', 'ダイヤモンドサークル, アイスランド', '移動だけで約4時間。道路・天候を確認して休憩を挟む。', 65.6331164, -17.0057229),
-        activity('iceland-skulagardur-stay', '17:00', 'Skúlagarður チェックイン', 'Skúlagarður, 671 Garður, アイスランド', '宿泊。', 66.077104, -16.710038),
+        activity('iceland-skulagardur-stay', '17:00', 'Skúlagarður Country Hotel', 'Skúlagarður, 671 Garður, アイスランド', 'ファミリールーム（大型ダブル1台＋二段ベッド1台・専用バスルーム）。ランドリーサービスあり。', 66.077104, -16.710038),
       ],
     },
     {
@@ -106,7 +106,7 @@ export const icelandTrip = {
         activity('iceland-husavik-sightseeing', '13:00', 'フーサヴィーク＆ダイヤモンドサークル観光', 'フーサヴィーク, アイスランド', 'まだ行けていない場所を観光。', 66.0433168, -17.3410402),
         activity('iceland-akureyri-drive', '16:30', 'アークレイリへ移動', 'アークレイリ, アイスランド', '移動約1.5時間。', 65.6839036, -18.1121756),
         activity('iceland-forest-lagoon', '18:30', 'Forest Lagoonで温泉', 'Forest Lagoon, アークレイリ', '温泉でChill 🤙', 65.6699183, -18.0417986),
-        activity('iceland-akureyri-stay', '21:00', 'アークレイリの宿にチェックイン', 'Stórholt 1, 603 アークレイリ, アイスランド', '宿泊。近くに安いスーパーあり。', 65.6911099, -18.1067817),
+        activity('iceland-akureyri-stay', '21:00', 'Akureyri Hostel', 'Stórholt 1, 603 アークレイリ, アイスランド', 'スモールツイン（シングル2台・共用バスルーム）。共用キッチンは7:00〜22:00、ランドリーなし。', 65.6911099, -18.1067817),
       ],
     },
     {
@@ -117,7 +117,7 @@ export const icelandTrip = {
       activities: [
         activity('iceland-leave-akureyri', '09:00', 'アークレイリを出発', 'アークレイリ, アイスランド', '移動約2時間。', 65.6839036, -18.1121756),
         activity('iceland-hvammstangi-tbd', '12:00', '自由時間（TBD）', 'クヴァンムスタンギ周辺', 'やることは現地の天候と体力を見て決定。', 65.3969593, -20.9440293),
-        activity('iceland-vidihlid-stay', '18:00', 'Víðihlíðの宿にチェックイン', 'Víðihlíð, 531 クヴァンムスタンギ, アイスランド', '宿泊。', 65.239, -20.65),
+        activity('iceland-vidihlid-stay', '18:00', 'Aurora Igloo North', 'Víðihlíð, 531 クヴァンムスタンギ, アイスランド', 'オーロラドーム（ダブルベッド・共用バスルーム）。設備の整った共用キッチンあり。', 65.239, -20.65),
       ],
     },
     {
@@ -128,7 +128,7 @@ export const icelandTrip = {
       activities: [
         activity('iceland-reykjavik-drive', '09:00', 'レイキャヴィークへ移動', 'レイキャヴィーク, アイスランド', '道路状況を確認して移動。', 64.145981, -21.9422367),
         activity('iceland-reykjavik-tbd', '13:00', '自由時間（TBD）', 'レイキャヴィーク, アイスランド', 'やることは現地で決定。', 64.145981, -21.9422367),
-        activity('iceland-reykjavik-stay-one', '18:00', 'レイキャヴィークの宿にチェックイン', 'Brautarholt 4, 105 レイキャビク, アイスランド', '10/14・10/15の2連泊。', 64.1417422, -21.910563),
+        activity('iceland-reykjavik-stay-one', '18:00', 'Guesthouse Pavi', 'Brautarholt 4, 105 レイキャビク, アイスランド', 'ツイン（シングル2台・共用バスルーム）。2連泊。共用キッチンあり、階段のみ。', 64.1417422, -21.910563),
       ],
     },
     {
@@ -139,7 +139,7 @@ export const icelandTrip = {
       activities: [
         activity('iceland-blue-lagoon', '08:00', 'ブルーラグーン', 'ブルーラグーン, アイスランド', '08:00–11:00。', 63.8791684, -22.4443196),
         activity('iceland-phallological-museum', '12:00', 'アイスランドペニス博物館', 'アイスランドペニス博物館, レイキャヴィーク', 'ブルーラグーン後に立ち寄る候補。', 64.1484683, -21.9357603),
-        activity('iceland-reykjavik-stay-two', '18:00', 'レイキャヴィークの宿へ戻る', 'Brautarholt 4, 105 レイキャビク, アイスランド', '2泊目。翌朝は早いので荷造りと給油を済ませる。', 64.1417422, -21.910563),
+        activity('iceland-reykjavik-stay-two', '18:00', 'Guesthouse Pavi（2泊目）', 'Brautarholt 4, 105 レイキャビク, アイスランド', 'Guesthouse Paviの2泊目。共用キッチン・共用バスルーム。翌朝に備えて荷造り。', 64.1417422, -21.910563),
       ],
     },
     {
