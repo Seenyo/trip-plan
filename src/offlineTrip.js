@@ -8,14 +8,24 @@ export function offlineTripManifest(tripId) {
   try { return JSON.parse(localStorage.getItem(manifestKey(tripId)) || 'null'); } catch { return null; }
 }
 
-export function isOfflineTripComplete(manifest) {
+function manifestMatchesTrip(manifest, currentTrip) {
+  if (!manifest?.trip || !currentTrip) return false;
+  try { return JSON.stringify(manifest?.trip) === JSON.stringify(currentTrip); } catch { return false; }
+}
+
+export function isOfflineTripComplete(manifest, currentTrip = manifest?.trip) {
   return Boolean(
     manifest?.shellReady
     && manifest.documentsFresh
     && Number.isInteger(manifest.mediaTotal)
     && Number.isInteger(manifest.mediaSaved)
     && manifest.mediaSaved === manifest.mediaTotal
+    && manifestMatchesTrip(manifest, currentTrip)
   );
+}
+
+export function removeOfflineTrip(tripId) {
+  try { localStorage.removeItem(manifestKey(tripId)); return true; } catch { return false; }
 }
 
 export function offlineTripSnapshots() {

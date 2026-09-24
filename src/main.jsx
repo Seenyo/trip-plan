@@ -57,7 +57,7 @@ import PlanImage from './PlanImage';
 import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
-import { isOfflineTripComplete, offlineTripManifest, saveTripOffline } from './offlineTrip';
+import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
 import { splitOverlappingRouteLegs } from './routePresentation';
 import { uploadPlanImage } from './travelDocuments';
 import {
@@ -242,6 +242,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       window.dispatchEvent(new Event('roam-maps-ready'));
     };
     const mapsFailed = () => {
+      document.querySelector('script[data-roam-maps]')?.remove();
       setMapStatus('error');
       window.dispatchEvent(new Event('roam-maps-error'));
     };
@@ -257,8 +258,18 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   }, [apiKey]);
 
   useEffect(() => {
-    if (!apiKey) setMapStatus('missing');
-    else if (window.google?.maps) setMapStatus('ready');
+    if (!apiKey) {
+      overlays.current.forEach((overlay) => overlay.setMap(null));
+      overlays.current = [];
+      locationMarker.current?.setMap(null);
+      locationMarker.current = null;
+      if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
+      mapRef.current = null;
+      routeCache.current = null;
+      setRouteStatus('idle');
+      setMapStatus('missing');
+    } else if (window.google?.maps) setMapStatus('ready');
+    else setMapStatus('loading');
   }, [apiKey]);
 
   useEffect(() => {
@@ -295,6 +306,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   useEffect(() => () => {
     if (locationWatch.current !== null) navigator.geolocation?.clearWatch(locationWatch.current);
     locationMarker.current?.setMap(null);
+    overlays.current.forEach((overlay) => overlay.setMap(null));
+    overlays.current = [];
+    if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
+    mapRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -381,6 +396,14 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
           location = result.results?.[0]?.formatted_address || location;
         } catch { /* coordinates remain usable */ }
         onMapPick({ coords, location });
+      });
+    }
+    if (currentLocation && !locationMarker.current) {
+      locationMarker.current = createMapMarker(window.google.maps, mapRef.current, currentLocation, {
+        className: 'map-current-location',
+        text: '',
+        title: '現在地',
+        onClick: () => mapRef.current?.panTo(currentLocation),
       });
     }
     overlays.current.forEach((overlay) => overlay.setMap(null));
@@ -581,7 +604,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors]);
+  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -1112,6 +1135,7 @@ function App() {
   const deleteTrip = (id) => {
     if (!confirm('この旅行を削除しますか？')) return;
     const remaining = trips.filter((item) => item.id !== id);
+    removeOfflineTrip(id);
     setTrips(remaining);
     if (id === selectedId) { setSelectedId(remaining[0]?.id); setDayIndex(0); }
   };
@@ -1129,7 +1153,7 @@ function App() {
     setOfflineSave({ tripId: trip.id, status: 'saving', message: 'オフライン保存を準備しています…' });
     try {
       const saved = await saveTripOffline(trip, (message) => setOfflineSave({ tripId: trip.id, status: 'saving', message }));
-      const complete = isOfflineTripComplete(saved);
+      const complete = isOfflineTripComplete(saved, trip);
       const missing = [
         !saved.shellReady && 'アプリ本体',
         !saved.documentsFresh && '最新のガイド',
@@ -1153,7 +1177,7 @@ function App() {
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
 
   const storedOfflineManifest = offlineTripManifest(trip.id);
-  const offlineComplete = isOfflineTripComplete(storedOfflineManifest);
+  const offlineComplete = isOfflineTripComplete(storedOfflineManifest, trip);
   const offlinePartial = Boolean(storedOfflineManifest) && !offlineComplete;
   const offlineButtonLabel = offlineComplete
     ? 'オフライン保存済み。もう一度保存'
