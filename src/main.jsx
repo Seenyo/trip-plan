@@ -24,7 +24,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  ExternalLink,
   GripVertical,
+  ImagePlus,
   MapPin,
   Navigation,
   PanelLeftClose,
@@ -34,7 +36,9 @@ import {
   Pencil,
   Plus,
   Settings,
+  Search,
   Sparkles,
+  Store,
   Trash2,
   X,
 } from 'lucide-react';
@@ -44,8 +48,11 @@ import { useSharedWorkspace } from './useSharedWorkspace';
 import { migrateTripsForCurrentApp } from './tripMigrations';
 import './styles.css';
 import PlaceSearch from './PlaceSearch';
+import PlanImage from './PlanImage';
 import './offline';
 import './travelReader.css';
+import { searchBonusStores, searchTripActivities } from './planPlaces';
+import { uploadPlanImage } from './travelDocuments';
 import {
   formatTravelDistance,
   formatTravelDuration,
@@ -112,16 +119,20 @@ function useStoredState(key, initialValue) {
   return [value, setValue];
 }
 
-function createStopMarker(maps, map, position, number, title, color) {
+function createMapMarker(maps, map, position, { className, text, title, style, onClick }) {
   const marker = new maps.OverlayView();
-  const node = document.createElement('div');
-  node.className = 'map-stop-marker';
-  node.textContent = String(number);
-  node.style.backgroundColor = color;
-  node.style.color = routeTextColor(color);
-  node.setAttribute('role', 'img');
-  node.setAttribute('aria-label', `${number}. ${title || '場所'}`);
-  marker.onAdd = () => marker.getPanes().overlayLayer.appendChild(node);
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = className;
+  node.textContent = text;
+  node.setAttribute('aria-label', title);
+  Object.assign(node.style, style);
+  node.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+  });
+  marker.onAdd = () => marker.getPanes().overlayMouseTarget.appendChild(node);
   marker.draw = () => {
     const point = marker.getProjection().fromLatLngToDivPixel(new maps.LatLng(position));
     if (!point) return;
@@ -133,13 +144,51 @@ function createStopMarker(maps, map, position, number, title, color) {
   return marker;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, varyRouteColors }) {
+function createStopMarker(maps, map, item, number, color, onClick) {
+  return createMapMarker(maps, map, item.coords, {
+    className: 'map-stop-marker',
+    text: String(number),
+    title: `${number}. ${item.title || '場所'}の詳細を表示`,
+    style: { backgroundColor: color, color: routeTextColor(color) },
+    onClick,
+  });
+}
+
+function MapDetailCard({ selection, onClose, onGuide }) {
+  if (!selection) return null;
+  if (selection.type === 'bonus') {
+    const store = selection.item;
+    return <article className="map-detail-card bonus-detail-card" aria-live="polite">
+      <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
+      <span className="map-detail-symbol"><Store size={19} /></span>
+      <div className="map-detail-copy"><small>近くのスーパーマーケット</small><h2>{store.title}</h2>
+        {store.location && <p>{store.location}</p>}
+        {store.googleMapsURI && <a href={store.googleMapsURI} target="_blank" rel="noreferrer">Google Mapsで開く <ExternalLink size={14} /></a>}
+      </div>
+    </article>;
+  }
+  const activity = selection.item;
+  const firstImage = activity.images?.[0];
+  return <article className={`map-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
+    <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
+    {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager />}
+    <div className="map-detail-copy"><small>{activity.time || '時間未定'}</small><h2>{activity.title}</h2>
+      {activity.location && <p>{activity.location}</p>}
+      {activity.notes && <p className="map-detail-notes">{activity.notes}</p>}
+      <button onClick={() => onGuide(activity)}><BookOpen size={14} />地点ガイドを見る</button>
+    </div>
+  </article>;
+}
+
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, varyRouteColors, showBonus, focusRequest, onGuide }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
   const routeCache = useRef(null);
+  const bonusCache = useRef(new Map());
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
   const [routeStatus, setRouteStatus] = useState('idle');
+  const [selection, setSelection] = useState(null);
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
@@ -174,6 +223,12 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
     observer.observe(mapNode.current);
     return () => observer.disconnect();
   }, [mapStatus]);
+
+  useEffect(() => setSelection(null), [day.id]);
+  useEffect(() => {
+    const focused = day.activities.find((activity) => activity.id === focusRequest?.activityId);
+    if (focused) setSelection({ type: 'activity', item: focused });
+  }, [day.activities, focusRequest]);
 
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
@@ -215,6 +270,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
         ],
       });
       mapRef.current.addListener('click', async (event) => {
+        setSelection(null);
         const coords = { lat: event.latLng.lat(), lng: event.latLng.lng() };
         let location = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
         try {
@@ -232,10 +288,33 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
     if (connectPreviousDay) bounds.extend(previousPoint);
     mappedStops.forEach(({ item, index }) => {
       const color = routeColorForIndex(index, varyRouteColors);
-      const marker = createStopMarker(window.google.maps, mapRef.current, item.coords, index + 1, item.title, color);
+      const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
+        () => setSelection({ type: 'activity', item }));
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
+    if (showBonus && mappedStops.length) {
+      const bonusKey = JSON.stringify(mappedStops.map(({ item }) => [item.coords.lat, item.coords.lng]));
+      let storesPromise = bonusCache.current.get(bonusKey);
+      if (!storesPromise) {
+        storesPromise = searchBonusStores(window.google.maps, mappedStops.map(({ item }) => item));
+        bonusCache.current.set(bonusKey, storesPromise);
+      }
+      storesPromise.then((stores) => {
+        if (cancelled) return;
+        stores.forEach((store) => {
+          const marker = createMapMarker(window.google.maps, mapRef.current, store.coords, {
+            className: 'map-bonus-marker',
+            text: 'B',
+            title: `${store.title}の詳細を表示`,
+            onClick: () => setSelection({ type: 'bonus', item: store }),
+          });
+          overlays.current.push(marker);
+        });
+      }).catch((error) => {
+        if (!cancelled) console.warn('近くのBónusを表示できませんでした。', error);
+      });
+    }
     if (routePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 80);
       const drawDrivingRoute = async () => {
@@ -356,7 +435,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, varyRouteColors]);
+  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, showBonus, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -385,11 +464,12 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
             className={`map-pin pin-${index + 1}`}
             key={item.id}
             style={{ '--pin-color': index === 0 ? '#FF5722' : '#303841' }}
-            onClick={() => onMapPick({ coords: item.coords, location: item.location })}
+            onClick={() => setSelection({ type: 'activity', item })}
             aria-label={item.title}
           >{index + 1}</button>
         ))}
         {accessCard()}
+        <MapDetailCard selection={selection} onClose={() => setSelection(null)} onGuide={onGuide} />
       </div>
     );
   }
@@ -401,6 +481,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">ルートを検索しています…</span>}
       {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">ルートを表示できません</span>}
       {mapStatus === 'ready' && routeStatus === 'partial' && <span className="map-route-note">一部の移動ルートを計算できません</span>}
+      <MapDetailCard selection={selection} onClose={() => setSelection(null)} onGuide={onGuide} />
     </div>
   );
 }
@@ -409,6 +490,35 @@ function SearchBar({ apiKey, onResult }) {
   const [query, setQuery] = useState('');
   return <PlaceSearch variant="map" value={query} onChange={setQuery} apiKey={apiKey}
     onSelect={(place) => { setQuery(place.location); onResult(place); }} />;
+}
+
+function PlanSearch({ trip, onSelect }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const results = useMemo(() => searchTripActivities(trip, query).slice(0, 12), [trip, query]);
+  const hasQuery = query.trim().length > 0;
+  useEffect(() => { setQuery(''); setOpen(false); }, [trip.id]);
+  return <div className="plan-search" onBlur={(event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+  }}>
+    <Search size={16} aria-hidden="true" />
+    <input value={query} onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+      onFocus={() => setOpen(true)} onKeyDown={(event) => {
+        if (event.key === 'Escape') { setOpen(false); event.currentTarget.blur(); }
+      }} placeholder="この旅行の予定を検索" aria-label="この旅行の予定を検索" />
+    {hasQuery && <button className="plan-search-clear" onClick={() => { setQuery(''); setOpen(false); }} aria-label="予定検索をクリア"><X size={15} /></button>}
+    {open && hasQuery && <div className="plan-search-results">
+      {results.length ? results.map((result) => <button key={`${result.day.id}:${result.activity.id}`} onClick={() => {
+        setQuery(result.activity.title);
+        setOpen(false);
+        onSelect(result);
+      }}>
+        <span>{result.dayIndex + 1}日目 · {formatDay(result.day.date, { month: 'numeric', day: 'numeric' })}</span>
+        <strong>{result.activity.title}</strong>
+        <small>{result.activity.location || result.day.title}</small>
+      </button>) : <p>この旅行には一致する予定がありません</p>}
+    </div>}
+  </div>;
 }
 
 function DayStrip({ trip, dayIndex, setDayIndex }) {
@@ -468,6 +578,10 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         </div>
         <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
         {item.notes && <small>{item.notes}</small>}
+        {item.images?.length > 0 && <div className="stop-images" aria-label={`${item.title}の写真`}>
+          {item.images.slice(0, 3).map((image, imageIndex) => <PlanImage key={image.id || image.path || imageIndex} image={image} />)}
+          {item.images.length > 3 && <span>+{item.images.length - 3}</span>}
+        </div>}
         <button className="guide-entry" onClick={() => onGuide(item)}><BookOpen size={14} />地点ガイド</button>
       </div>
     </article>
@@ -517,7 +631,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide }) {
+function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSearchResult }) {
   const touch = useRef(null);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -571,6 +685,7 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
         </div>
         <button className="icon-button subtle" onClick={onEditDay} aria-label="この日を編集"><Pencil size={17} /></button>
       </div>
+      <PlanSearch trip={trip} onSelect={onSearchResult} />
       <div className="day-arrows">
         <button aria-label="前の日" title="前の日" onClick={() => setDayIndex(Math.max(0, dayIndex - 1))} disabled={dayIndex === 0}><ChevronLeft size={17} /></button>
         <span>{dayIndex + 1} / {trip.days.length}</span>
@@ -645,14 +760,50 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
   );
 }
 
-function ActivityForm({ initial, onSave, onClose, apiKey }) {
+function ActivityForm({ initial, onSave, onClose, apiKey, tripId }) {
   const [form, setForm] = useState({
-    time: '10:00', title: '', location: '', notes: '', coords: null, travelMode: 'DRIVING', ...initial,
+    time: '10:00', title: '', location: '', notes: '', coords: null, travelMode: 'DRIVING', images: [], ...initial,
+    images: initial?.images || [],
   });
+  const [pendingImages, setPendingImages] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [imageError, setImageError] = useState('');
+  const pendingImagesRef = useRef(pendingImages);
+  pendingImagesRef.current = pendingImages;
+  useEffect(() => () => pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.preview)), []);
   const set = (name, value) => setForm((current) => ({ ...current, [name]: value }));
+  const addImages = (event) => {
+    const files = [...(event.target.files || [])];
+    event.target.value = '';
+    if (!files.length) return;
+    const remaining = Math.max(0, 8 - form.images.length - pendingImages.length);
+    const accepted = files.filter((file) => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)
+      && file.size <= 10 * 1024 * 1024).slice(0, remaining);
+    setImageError(accepted.length === files.length ? '' : remaining === 0
+      ? '写真は1つの予定につき8枚まで追加できます。'
+      : 'JPEG・PNG・WebP・GIFの10MB以下の写真を選んでください。');
+    setPendingImages((current) => [...current, ...accepted.map((file) => ({ id: uid(), file, preview: URL.createObjectURL(file) }))]);
+  };
+  const removePendingImage = (id) => setPendingImages((current) => current.filter((image) => {
+    if (image.id === id) URL.revokeObjectURL(image.preview);
+    return image.id !== id;
+  }));
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.title.trim() || busy) return;
+    setBusy(true);
+    setImageError('');
+    try {
+      const uploaded = await Promise.all(pendingImages.map(({ file }) => uploadPlanImage(tripId, file)));
+      onSave({ ...form, images: [...form.images, ...uploaded], id: form.id || uid() });
+    } catch (error) {
+      setImageError(error.message || '写真をアップロードできませんでした。');
+      setBusy(false);
+    }
+  };
   return (
-    <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={onClose}>
-      <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title.trim()) onSave({ ...form, id: form.id || uid() }); }}>
+    <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={() => { if (!busy) onClose(); }}>
+      <form className="form-grid" onSubmit={submit}>
         <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
         <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
         <div className="field full"><span>場所</span>
@@ -676,7 +827,24 @@ function ActivityForm({ initial, onSave, onClose, apiKey }) {
           <small>この予定までの移動方法を選べます</small>
         </fieldset>
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
-        <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button">予定を保存</button></div>
+        <div className="field full plan-photo-field"><span>写真</span>
+          {(form.images.length > 0 || pendingImages.length > 0) && <div className="plan-photo-grid">
+            {form.images.map((image, index) => <div className="plan-photo-item" key={image.id || image.path || index}>
+              <PlanImage image={image} />
+              <button type="button" onClick={() => set('images', form.images.filter((_, imageIndex) => imageIndex !== index))} aria-label={`${index + 1}枚目の写真を外す`}><X size={15} /></button>
+            </div>)}
+            {pendingImages.map((image, index) => <div className="plan-photo-item is-pending" key={image.id}>
+              <img src={image.preview} alt={image.file.name} />
+              <button type="button" onClick={() => removePendingImage(image.id)} aria-label={`追加予定の${index + 1}枚目の写真を外す`}><X size={15} /></button>
+            </div>)}
+          </div>}
+          <label className={`plan-photo-upload ${form.images.length + pendingImages.length >= 8 ? 'is-disabled' : ''}`}>
+            <input type="file" aria-label="写真を追加" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={busy || form.images.length + pendingImages.length >= 8} onChange={addImages} />
+            <ImagePlus size={18} /><span><strong>写真を追加</strong><small>複数選択できます · 1枚10MBまで</small></span>
+          </label>
+          {imageError && <small className="plan-photo-error" role="alert">{imageError}</small>}
+        </div>
+        <div className="modal-actions full"><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>キャンセル</button><button className="primary-button" disabled={busy}>{busy ? '写真を保存中…' : '予定を保存'}</button></div>
       </form>
     </Modal>
   );
@@ -740,6 +908,7 @@ function App() {
   const [railOpen, setRailOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
   const [travelTimes, setTravelTimes] = useState({});
+  const [mapFocus, setMapFocus] = useState(null);
   const [modal, setModal] = useState(null);
   const [reader, setReader] = useState(null);
   const trip = trips.find((item) => item.id === selectedId) || sortedTrips[0];
@@ -812,16 +981,22 @@ function App() {
         <SearchBar apiKey={apiKey} onResult={mapPick} />
         <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes}
-          varyRouteColors={varyRouteColors} />
+          varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} focusRequest={mapFocus}
+          onGuide={(activity) => setReader({ trip, activity })} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
       </section>
       <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
-      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })} />
+      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })}
+      onSearchResult={({ activity, dayIndex: resultDayIndex }) => {
+        setDayIndex(resultDayIndex);
+        setMapFocus({ activityId: activity.id, requestId: uid() });
+        if (window.matchMedia('(max-width: 820px)').matches) setSheetOpen(false);
+      }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
-      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} />}
+      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
         <div className="modal-actions">
