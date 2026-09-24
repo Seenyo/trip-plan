@@ -14,25 +14,38 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   document.body.innerHTML = '<div id="root"></div>';
   await act(async () => { await import('../src/main.jsx'); });
   const sheet = document.querySelector('.itinerary-sheet');
+  const app = document.querySelector('.app-shell');
+
+  expect(sheet.dataset.sheetStage).toBe('peek');
 
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
-  expect(sheet.classList.contains('sheet-open')).toBe(true);
+  expect(sheet.dataset.sheetStage).toBe('half');
+  expect(app.classList.contains('mobile-sheet-half')).toBe(true);
+
+  fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  expect(sheet.dataset.sheetStage).toBe('full');
+  expect(app.classList.contains('mobile-sheet-full')).toBe(true);
 
   sheet.scrollTop = 100;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
-  expect(sheet.classList.contains('sheet-open')).toBe(true);
+  expect(sheet.dataset.sheetStage).toBe('full');
 
   sheet.scrollTop = 0;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
-  expect(sheet.classList.contains('sheet-open')).toBe(false);
+  expect(sheet.dataset.sheetStage).toBe('half');
+
+  fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  expect(sheet.dataset.sheetStage).toBe('peek');
 
   fireEvent.click(sheet.querySelector('.sheet-handle-wrap'));
-  expect(sheet.classList.contains('sheet-open')).toBe(true);
+  expect(sheet.dataset.sheetStage).toBe('half');
   fireEvent.click(sheet.querySelector('.sheet-handle-wrap'));
-  expect(sheet.classList.contains('sheet-open')).toBe(false);
+  expect(sheet.dataset.sheetStage).toBe('peek');
 
   fireEvent.click(document.querySelector('[aria-label="羽田空港を出発を削除"]'));
   const dialog = document.querySelector('[role="dialog"]');

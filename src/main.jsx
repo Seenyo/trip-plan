@@ -374,7 +374,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         center,
         zoom: 12,
         disableDefaultUI: true,
-        zoomControl: true,
+        zoomControl: false,
         gestureHandling: 'greedy',
         styles: [
           { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
@@ -812,7 +812,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
+function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
   const touch = useRef(null);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -835,8 +835,8 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    if (!open && sheet.current) sheet.current.scrollTop = 0;
-  }, [open]);
+    if (sheet.current) sheet.current.scrollTop = 0;
+  }, [stage]);
   const onTouchStart = (event) => {
     const t = event.changedTouches[0];
     touch.current = { x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1 };
@@ -849,14 +849,19 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
     } else if (Math.abs(dy) > Math.abs(dx)) {
-      if (!open && dy < -35) setOpen(true);
-      else if (open && touch.current.atTop && event.currentTarget.scrollTop <= 1 && dy > 45) setOpen(false);
+      if (dy < -35 && stage === 'peek') setStage('half');
+      else if (dy < -35 && stage === 'half') setStage('full');
+      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'full') setStage('half');
+      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'half') setStage('peek');
     }
     touch.current = null;
   };
+  const handleLabel = stage === 'peek' ? '旅程を半分開く' : '旅程を閉じる';
   return (
-    <section ref={sheet} className={`itinerary-sheet ${open ? 'sheet-open' : ''}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
-      <button ref={handle} className="sheet-handle-wrap" onClick={() => setOpen(!open)} aria-label={open ? '旅程を閉じる' : '旅程を開く'}><span className="sheet-handle" /></button>
+    <section ref={sheet} className={`itinerary-sheet sheet-${stage}`} data-sheet-stage={stage}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
+      <button ref={handle} className="sheet-handle-wrap" onClick={() => setStage(stage === 'peek' ? 'half' : 'peek')}
+        aria-label={handleLabel} aria-expanded={stage !== 'peek'}><span className="sheet-handle" /></button>
       <div ref={mobileDays} className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
       <div className="sheet-title-row">
         <div>
@@ -1086,7 +1091,7 @@ function App() {
   const sortedTrips = useMemo(() => sortTripsByStartDate(trips), [trips]);
   const [selectedId, setSelectedId] = useState(() => sortTripsByStartDate(trips)[0]?.id);
   const [dayIndex, setDayIndex] = useState(0);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetStage, setSheetStage] = useState('peek');
   const [railOpen, setRailOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
   const [travelTimes, setTravelTimes] = useState({});
@@ -1174,7 +1179,7 @@ function App() {
     : offlinePartial ? 'オフライン保存を完了する' : 'この旅行をオフライン保存';
 
   return (
-    <main className={`app-shell ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
+    <main className={`app-shell mobile-sheet-${sheetStage} ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
       <TripRail trips={sortedTrips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
       {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="旅行一覧を閉じる" />}
       <section className="map-stage">
@@ -1210,18 +1215,18 @@ function App() {
           {offlineSave.message}
         </div>}
       </section>
-      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
+      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })}
       onSelect={(activity) => {
         setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'toggle' });
-        if (window.matchMedia('(max-width: 820px)').matches) setSheetOpen(false);
+        if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
       }}
       onSearchResult={({ activity, dayIndex: resultDayIndex }) => {
         setDayIndex(resultDayIndex);
         setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'select' });
-        if (window.matchMedia('(max-width: 820px)').matches) setSheetOpen(false);
+        if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
