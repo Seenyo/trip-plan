@@ -61,8 +61,10 @@ import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTrip
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { uploadPlanImage } from './travelDocuments';
 import {
+  distanceKmBetween,
   formatTravelDistance,
   formatTravelDuration,
+  previousDayRouteOrigin,
   reorderActivitiesIntoTimeSlots,
   routeColorForIndex,
   sortActivitiesByTime,
@@ -98,17 +100,6 @@ const dateRange = (trip) => {
   const start = formatDay(trip.startDate, { year: 'numeric', month: 'short', day: 'numeric' });
   const end = formatDay(trip.endDate, { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric' });
   return `${start} — ${end}`;
-};
-
-const distanceKm = (start, end) => {
-  const toRadians = (degrees) => degrees * (Math.PI / 180);
-  const latitudeDelta = toRadians(end.lat - start.lat);
-  const longitudeDelta = toRadians(end.lng - start.lng);
-  const startLatitude = toRadians(start.lat);
-  const endLatitude = toRadians(end.lat);
-  const haversine = Math.sin(latitudeDelta / 2) ** 2
-    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 };
 
 function useStoredState(key, initialValue) {
@@ -282,6 +273,8 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   }, [mapStatus]);
 
   const selectedActivityId = selection?.type === 'activity' ? selection.activityId : null;
+  const selectedPreviousActivity = selection?.type === 'previous' ? selection.item : null;
+  const previousActivity = previousDayRouteOrigin(day, previousDay);
   const resolvedSelection = selection?.type === 'activity'
     ? (() => {
       const item = day.activities.find((activity) => activity.id === selection.activityId);
@@ -296,12 +289,17 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   }, [day.activities]);
   useEffect(() => {
     if (!focusRequest?.requestId || handledFocusRequest.current === focusRequest.requestId) return;
-    const focused = day.activities.find((activity) => activity.id === focusRequest.activityId);
+    const focused = focusRequest.previousDay
+      ? previousActivity
+      : day.activities.find((activity) => activity.id === focusRequest.activityId);
     if (!focused) return;
     handledFocusRequest.current = focusRequest.requestId;
-    setSelection((current) => focusRequest.mode === 'toggle' && current?.type === 'activity' && current.activityId === focused.id
-      ? null : { type: 'activity', activityId: focused.id });
-  }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.mode, focusRequest?.requestId]);
+    const type = focusRequest.previousDay ? 'previous' : 'activity';
+    setSelection((current) => focusRequest.mode === 'toggle'
+      && current?.type === type
+      && (type === 'previous' ? current.item?.id : current.activityId) === focused.id
+      ? null : type === 'previous' ? { type, item: focused } : { type, activityId: focused.id });
+  }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.mode, focusRequest?.previousDay, focusRequest?.requestId, previousActivity]);
 
   useEffect(() => () => {
     if (locationWatch.current !== null) navigator.geolocation?.clearWatch(locationWatch.current);
@@ -349,19 +347,19 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         fromPreviousDay: false,
         travelMode: travelModeForActivity(item),
       }));
-    const previousActivity = previousDay?.activities.filter((item) => item.coords && item.route !== false).at(-1);
     const previousPoint = previousActivity?.coords;
-    const connectPreviousDay = day.drivingFromPrevious !== false
-      && previousPoint && routeableStops[0] && distanceKm(previousPoint, routeableStops[0].coords) < 900;
+    const connectPreviousDay = Boolean(previousActivity && routeableStops[0]);
     const rawRouteStops = connectPreviousDay
-      ? [{ id: null, coords: previousPoint, activityIndex: -1, fromPreviousDay: true, travelMode: null }, ...routeableStops]
+      ? [{ id: previousActivity.id, coords: previousPoint, activityIndex: -1, fromPreviousDay: true, travelMode: null }, ...routeableStops]
       : routeableStops;
     const routeStops = rawRouteStops.filter((stop, index) => index === 0
-      || distanceKm(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
+      || distanceKmBetween(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
     const currentDayRouteStops = routeStops.filter((stop) => !stop.fromPreviousDay);
     const selectedDayRouteIndex = currentDayRouteStops.findIndex((stop) => stop.id === selectedActivityId);
     const selectedDestination = selectedDayRouteIndex >= 0 ? currentDayRouteStops[selectedDayRouteIndex] : null;
-    const selectedStart = selectedDayRouteIndex > 0 ? currentDayRouteStops[selectedDayRouteIndex - 1] : null;
+    const selectedStart = selectedDayRouteIndex > 0
+      ? currentDayRouteStops[selectedDayRouteIndex - 1]
+      : selectedDayRouteIndex === 0 ? routeStops.find((stop) => stop.fromPreviousDay) : null;
     const selectedDestinationIndex = selectedDestination ? routeStops.indexOf(selectedDestination) : -1;
     const visibleStopIds = selectedActivityId
       ? new Set([selectedActivityId, selectedStart?.id].filter(Boolean))
@@ -411,8 +409,17 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
     onTravelTimesChange({});
     setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
     const bounds = new window.google.maps.LatLngBounds();
-    if (connectPreviousDay && !selectedActivityId) bounds.extend(previousPoint);
-    mappedStops.filter(({ item }) => !visibleStopIds || visibleStopIds.has(item.id)).forEach(({ item, index }) => {
+    const showPreviousMarker = connectPreviousDay
+      && (!selectedActivityId || selectedStart?.fromPreviousDay || selectedPreviousActivity);
+    if (showPreviousMarker) {
+      const previousMarker = createStopMarker(window.google.maps, mapRef.current, previousActivity, 0,
+        routeColorForIndex(0, varyRouteColors),
+        () => setSelection((current) => current?.type === 'previous'
+          ? null : { type: 'previous', item: previousActivity }));
+      overlays.current.push(previousMarker);
+      bounds.extend(previousPoint);
+    }
+    mappedStops.filter(({ item }) => !selectedPreviousActivity && (!visibleStopIds || visibleStopIds.has(item.id))).forEach(({ item, index }) => {
       const color = routeColorForIndex(index, varyRouteColors);
       const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
         () => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
@@ -420,7 +427,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
-    if (!selectedActivityId && showBonus && mappedStops.length) {
+    if (!selectedActivityId && !selectedPreviousActivity && showBonus && mappedStops.length) {
       const bonusKey = JSON.stringify(mappedStops.map(({ item }) => [item.coords.lat, item.coords.lng]));
       let storesPromise = bonusCache.current.get(bonusKey);
       if (!storesPromise) {
@@ -442,7 +449,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         if (!cancelled) console.warn('近くのBónusを表示できませんでした。', error);
       });
     }
-    if (!selectedActivityId && showChargers && mappedStops.length) {
+    if (!selectedActivityId && !selectedPreviousActivity && showChargers && mappedStops.length) {
       const hotelKey = JSON.stringify(mappedStops.map(({ item }) => [item.id, item.coords.lat, item.coords.lng]));
       let chargersPromise = chargerCache.current.get(hotelKey);
       if (!chargersPromise) {
@@ -465,7 +472,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       });
     }
     if (routePoints.length > 1) {
-      if (selectedActivityId && !selectedStart) {
+      if (selectedPreviousActivity) {
+        mapRef.current.setCenter(previousPoint);
+        mapRef.current.setZoom(14);
+      } else if (selectedActivityId && !selectedStart) {
         const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
         if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
       } else mapRef.current.fitBounds(bounds, 80);
@@ -553,7 +563,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
           );
           const visibleLegs = selectedActivityId
             ? routeLegs.filter((leg) => selectedStart && leg.destinationIndex === selectedDestinationIndex)
-            : routeLegs;
+            : selectedPreviousActivity ? [] : routeLegs;
           const routeChunks = varyRouteColors && !selectedActivityId
             ? splitOverlappingRouteLegs(visibleLegs)
             : visibleLegs.map((leg) => ({ ...leg, shared: false, sharedCount: 1, sharedIndex: 0 }));
@@ -594,7 +604,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors, viewportMode]);
+  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors, viewportMode]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -639,7 +649,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
           );
         })}
         {accessCard()}
-        <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime?.fromPreviousDay ? null : detailTravelTime}
+        <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime}
           onClose={() => setSelection(null)} onGuide={onGuide} />
       </div>
     );
@@ -657,7 +667,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         {locationStatus === 'locating' ? <LoaderCircle className="location-spinner" size={19} /> : <LocateFixed size={19} />}
       </button>
       {locationStatus === 'error' && <span className="map-location-error">現在地を取得できません</span>}
-      <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime?.fromPreviousDay ? null : detailTravelTime}
+      <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime}
         onClose={() => setSelection(null)} onGuide={onGuide} />
     </div>
   );
@@ -769,13 +779,38 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
   );
 }
 
-function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
+function PreviousDayStop({ item, varyRouteColors, onGuide, onSelect }) {
+  const color = routeColorForIndex(0, varyRouteColors);
+  return <article className="stop previous-day-stop">
+    <div className="stop-time"><span>前日</span><strong>{item.time || '時間未定'}</strong></div>
+    <div className="stop-track">
+      <span className="stop-number" style={{ backgroundColor: '#ffffff', color }}>0</span>
+      <span className="stop-rule" style={{ backgroundColor: color }} />
+    </div>
+    <div className="stop-copy" tabIndex="0" aria-label={`${item.title}を地図で表示`}
+      onClick={(event) => { if (!event.target.closest('button, a')) onSelect(item, { previousDay: true }); }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+          onSelect(item, { previousDay: true });
+        }
+      }}>
+      <span className="previous-day-label">前日の最終地点</span>
+      <div className="stop-heading"><h3>{item.title}</h3></div>
+      <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
+      <button className="guide-entry" onClick={() => onGuide(item)}><BookOpen size={14} />地点ガイド</button>
+    </div>
+  </article>;
+}
+
+function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const activeItem = day.activities.find((item) => item.id === activeId);
+  const previousActivity = previousDayRouteOrigin(day, previousDay);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const finishDrag = ({ active, over }) => {
     setActiveId(null);
@@ -788,6 +823,8 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
     <DndContext sensors={sensors} collisionDetection={closestCenter}
       onDragStart={({ active }) => setActiveId(active.id)} onDragCancel={() => setActiveId(null)} onDragEnd={finishDrag}>
       <div className="timeline">
+        {previousActivity && <PreviousDayStop item={previousActivity} varyRouteColors={varyRouteColors}
+          onGuide={onGuide} onSelect={onSelect} />}
         {day.activities.length === 0 ? (
           <button className="empty-day" onClick={onAdd}>
             <span><Sparkles size={20} /></span>
@@ -812,7 +849,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
+function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
   const touch = useRef(null);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -877,7 +914,7 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
         <span>{dayIndex + 1} / {trip.days.length}</span>
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
-      <Timeline day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
+      <Timeline day={day} previousDay={previousDay} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
         onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} onSelect={onSelect} />
     </section>
   );
@@ -1215,12 +1252,12 @@ function App() {
           {offlineSave.message}
         </div>}
       </section>
-      <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
+      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })}
-      onSelect={(activity) => {
-        setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'toggle' });
+      onSelect={(activity, options = {}) => {
+        setMapFocus({ activityId: activity.id, previousDay: options.previousDay, requestId: uid(), mode: 'toggle' });
         if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
       }}
       onSearchResult={({ activity, dayIndex: resultDayIndex }) => {
