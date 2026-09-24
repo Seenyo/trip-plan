@@ -20,6 +20,7 @@ const mount = async (options) => {
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
   vi.resetAllMocks();
   loadSharedWorkspace.mockResolvedValue(remote);
   saveSharedWorkspace.mockResolvedValue({ revision: 5 });
@@ -34,6 +35,18 @@ it('keeps failed loads local and does not try saving over unread cloud data', as
   await act(() => vi.advanceTimersByTimeAsync(2000));
   expect(result.current.syncStatus).toBe('error');
   expect(JSON.parse(localStorage.getItem('roam.trips.v3'))).toEqual([{ id: 'edited-locally' }]);
+  expect(saveSharedWorkspace).not.toHaveBeenCalled();
+});
+
+it('restores a separately saved trip when starting without a connection', async () => {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+  localStorage.setItem('roam.trips.v3', JSON.stringify([{ id: 'local' }]));
+  localStorage.setItem('roam.offlineTrip.v1.saved', JSON.stringify({ trip: { id: 'saved', days: [] }, savedAt: '2026-09-24T00:00:00Z' }));
+  loadSharedWorkspace.mockRejectedValue(new Error('offline'));
+
+  const { result } = await mount();
+
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['local', 'saved']);
   expect(saveSharedWorkspace).not.toHaveBeenCalled();
 });
 

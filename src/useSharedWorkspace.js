@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isSupabaseConfigured, loadSharedWorkspace, saveSharedWorkspace } from './supabase';
 import { migrateTripsForCurrentApp } from './tripMigrations';
+import { offlineTripSnapshots } from './offlineTrip';
 
 const TRIPS_KEY = 'roam.trips.v3';
 
@@ -14,7 +15,12 @@ const readJson = (key, fallback) => {
 };
 
 export function useSharedWorkspace(initialTrips) {
-  const [trips, setTrips] = useState(() => migrateTripsForCurrentApp(readJson(TRIPS_KEY, initialTrips)));
+  const [trips, setTrips] = useState(() => {
+    const localTrips = migrateTripsForCurrentApp(readJson(TRIPS_KEY, initialTrips));
+    if (navigator.onLine) return localTrips;
+    const existing = new Set(localTrips.map((trip) => trip.id));
+    return [...localTrips, ...offlineTripSnapshots().filter((trip) => !existing.has(trip.id))];
+  });
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'loading' : 'local');
   const [ready, setReady] = useState(!isSupabaseConfigured);
   const revisionRef = useRef(0);

@@ -23,10 +23,14 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
   CirclePlus,
+  Download,
   ExternalLink,
   GripVertical,
   ImagePlus,
+  LocateFixed,
+  LoaderCircle,
   MapPin,
   Navigation,
   PanelLeftClose,
@@ -41,6 +45,7 @@ import {
   Store,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
 import { domesticTrip } from './domesticTrip';
 import { icelandTrip } from './icelandTrip';
@@ -51,14 +56,15 @@ import PlaceSearch from './PlaceSearch';
 import PlanImage from './PlanImage';
 import './offline';
 import './travelReader.css';
-import { searchBonusStores, searchTripActivities } from './planPlaces';
+import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
+import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
+import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { uploadPlanImage } from './travelDocuments';
 import {
   formatTravelDistance,
   formatTravelDuration,
   reorderActivitiesIntoTimeSlots,
   routeColorForIndex,
-  routeTextColor,
   sortActivitiesByTime,
   sortTripsByStartDate,
   travelModeForActivity,
@@ -119,6 +125,17 @@ function useStoredState(key, initialValue) {
   return [value, setValue];
 }
 
+function useOnlineStatus() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+  }, []);
+  return online;
+}
+
 function createMapMarker(maps, map, position, { className, text, title, style, onClick }) {
   const marker = new maps.OverlayView();
   const node = document.createElement('button');
@@ -149,12 +166,12 @@ function createStopMarker(maps, map, item, number, color, onClick) {
     className: 'map-stop-marker',
     text: String(number),
     title: `${number}. ${item.title || '場所'}の詳細を表示`,
-    style: { backgroundColor: color, color: routeTextColor(color) },
+    style: { backgroundColor: '#ffffff', color },
     onClick,
   });
 }
 
-function MapDetailCard({ selection, onClose, onGuide }) {
+function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
   if (!selection) return null;
   if (selection.type === 'bonus') {
     const store = selection.item;
@@ -167,12 +184,32 @@ function MapDetailCard({ selection, onClose, onGuide }) {
       </div>
     </article>;
   }
+  if (selection.type === 'charger') {
+    const charger = selection.item;
+    const distance = charger.distanceFromHotelKm < 1
+      ? `${Math.round(charger.distanceFromHotelKm * 1000)} m`
+      : `${charger.distanceFromHotelKm.toFixed(1)} km`;
+    return <article className="map-detail-card charger-detail-card" aria-live="polite">
+      <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
+      <span className="map-detail-symbol"><Zap size={19} /></span>
+      <div className="map-detail-copy"><small>{charger.hotelTitle}から約{distance}</small><h2>{charger.title}</h2>
+        {charger.location && <p>{charger.location}</p>}
+        {charger.googleMapsURI && <a href={charger.googleMapsURI} target="_blank" rel="noreferrer">Google Mapsで開く <ExternalLink size={14} /></a>}
+      </div>
+    </article>;
+  }
   const activity = selection.item;
   const firstImage = activity.images?.[0];
   return <article className={`map-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
     <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
     {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager />}
     <div className="map-detail-copy"><small>{activity.time || '時間未定'}</small><h2>{activity.title}</h2>
+      {travelTime && <div className={`travel-time map-travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}>
+        <strong>{travelTime.unavailable
+          ? `${travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}のルートなし`
+          : `${travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}で${formatTravelDuration(travelTime.durationMillis)}`}</strong>
+        {!travelTime.unavailable && formatTravelDistance(travelTime.distanceMeters) && <small>· {formatTravelDistance(travelTime.distanceMeters)}</small>}
+      </div>}
       {activity.location && <p>{activity.location}</p>}
       {activity.notes && <p className="map-detail-notes">{activity.notes}</p>}
       <button onClick={() => onGuide(activity)}><BookOpen size={14} />地点ガイドを見る</button>
@@ -180,16 +217,23 @@ function MapDetailCard({ selection, onClose, onGuide }) {
   </article>;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, varyRouteColors, showBonus, focusRequest, onGuide }) {
+function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
+  const locationMarker = useRef(null);
+  const locationWatch = useRef(null);
+  const selectionRef = useRef(null);
   const routeCache = useRef(null);
   const bonusCache = useRef(new Map());
+  const chargerCache = useRef(new Map());
   const handledFocusRequest = useRef(null);
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
   const [routeStatus, setRouteStatus] = useState('idle');
   const [selection, setSelection] = useState(null);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle');
+  selectionRef.current = selection;
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
@@ -198,6 +242,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       window.dispatchEvent(new Event('roam-maps-ready'));
     };
     const mapsFailed = () => {
+      document.querySelector('script[data-roam-maps]')?.remove();
       setMapStatus('error');
       window.dispatchEvent(new Event('roam-maps-error'));
     };
@@ -213,7 +258,18 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
   }, [apiKey]);
 
   useEffect(() => {
-    if (window.google?.maps && apiKey) setMapStatus('ready');
+    if (!apiKey) {
+      overlays.current.forEach((overlay) => overlay.setMap(null));
+      overlays.current = [];
+      locationMarker.current?.setMap(null);
+      locationMarker.current = null;
+      if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
+      mapRef.current = null;
+      routeCache.current = null;
+      setRouteStatus('idle');
+      setMapStatus('missing');
+    } else if (window.google?.maps) setMapStatus('ready');
+    else setMapStatus('loading');
   }, [apiKey]);
 
   useEffect(() => {
@@ -225,6 +281,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
     return () => observer.disconnect();
   }, [mapStatus]);
 
+  const selectedActivityId = selection?.type === 'activity' ? selection.activityId : null;
   const resolvedSelection = selection?.type === 'activity'
     ? (() => {
       const item = day.activities.find((activity) => activity.id === selection.activityId);
@@ -234,12 +291,50 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
 
   useEffect(() => setSelection(null), [day.id]);
   useEffect(() => {
+    setSelection((current) => current?.type === 'activity'
+      && !day.activities.some((activity) => activity.id === current.activityId) ? null : current);
+  }, [day.activities]);
+  useEffect(() => {
     if (!focusRequest?.requestId || handledFocusRequest.current === focusRequest.requestId) return;
     const focused = day.activities.find((activity) => activity.id === focusRequest.activityId);
     if (!focused) return;
     handledFocusRequest.current = focusRequest.requestId;
-    setSelection({ type: 'activity', activityId: focused.id });
-  }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.requestId]);
+    setSelection((current) => focusRequest.mode === 'toggle' && current?.type === 'activity' && current.activityId === focused.id
+      ? null : { type: 'activity', activityId: focused.id });
+  }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.mode, focusRequest?.requestId]);
+
+  useEffect(() => () => {
+    if (locationWatch.current !== null) navigator.geolocation?.clearWatch(locationWatch.current);
+    locationMarker.current?.setMap(null);
+    overlays.current.forEach((overlay) => overlay.setMap(null));
+    overlays.current = [];
+    if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
+    mapRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (mapStatus !== 'ready' || !mapRef.current || !currentLocation) return;
+    locationMarker.current?.setMap(null);
+    locationMarker.current = createMapMarker(window.google.maps, mapRef.current, currentLocation, {
+      className: 'map-current-location',
+      text: '',
+      title: '現在地',
+      onClick: () => mapRef.current?.panTo(currentLocation),
+    });
+  }, [currentLocation, mapStatus]);
+
+  const showCurrentLocation = () => {
+    if (!navigator.geolocation || locationStatus === 'locating') return;
+    setLocationStatus('locating');
+    if (locationWatch.current !== null) navigator.geolocation.clearWatch(locationWatch.current);
+    locationWatch.current = navigator.geolocation.watchPosition(({ coords }) => {
+      const next = { lat: coords.latitude, lng: coords.longitude };
+      setCurrentLocation(next);
+      setLocationStatus('ready');
+      mapRef.current?.panTo(next);
+      if ((mapRef.current?.getZoom?.() || 0) < 14) mapRef.current?.setZoom(14);
+    }, () => setLocationStatus('error'), { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+  };
 
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
@@ -263,6 +358,14 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       : routeableStops;
     const routeStops = rawRouteStops.filter((stop, index) => index === 0
       || distanceKm(rawRouteStops[index - 1].coords, stop.coords) > 0.05);
+    const currentDayRouteStops = routeStops.filter((stop) => !stop.fromPreviousDay);
+    const selectedDayRouteIndex = currentDayRouteStops.findIndex((stop) => stop.id === selectedActivityId);
+    const selectedDestination = selectedDayRouteIndex >= 0 ? currentDayRouteStops[selectedDayRouteIndex] : null;
+    const selectedStart = selectedDayRouteIndex > 0 ? currentDayRouteStops[selectedDayRouteIndex - 1] : null;
+    const selectedDestinationIndex = selectedDestination ? routeStops.indexOf(selectedDestination) : -1;
+    const visibleStopIds = selectedActivityId
+      ? new Set([selectedActivityId, selectedStart?.id].filter(Boolean))
+      : null;
     const routePoints = routeStops.map((stop) => stop.coords);
     const routeKey = JSON.stringify(routeStops.map((stop) => [stop.coords.lat, stop.coords.lng, stop.travelMode]));
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
@@ -281,6 +384,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
         ],
       });
       mapRef.current.addListener('click', async (event) => {
+        if (selectionRef.current?.type === 'activity') {
+          setSelection(null);
+          return;
+        }
         setSelection(null);
         const coords = { lat: event.latLng.lat(), lng: event.latLng.lng() };
         let location = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
@@ -291,20 +398,29 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
         onMapPick({ coords, location });
       });
     }
+    if (currentLocation && !locationMarker.current) {
+      locationMarker.current = createMapMarker(window.google.maps, mapRef.current, currentLocation, {
+        className: 'map-current-location',
+        text: '',
+        title: '現在地',
+        onClick: () => mapRef.current?.panTo(currentLocation),
+      });
+    }
     overlays.current.forEach((overlay) => overlay.setMap(null));
     overlays.current = [];
     onTravelTimesChange({});
     setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
     const bounds = new window.google.maps.LatLngBounds();
-    if (connectPreviousDay) bounds.extend(previousPoint);
-    mappedStops.forEach(({ item, index }) => {
+    if (connectPreviousDay && !selectedActivityId) bounds.extend(previousPoint);
+    mappedStops.filter(({ item }) => !visibleStopIds || visibleStopIds.has(item.id)).forEach(({ item, index }) => {
       const color = routeColorForIndex(index, varyRouteColors);
       const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
-        () => setSelection({ type: 'activity', activityId: item.id }));
+        () => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
+          ? null : { type: 'activity', activityId: item.id }));
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
-    if (showBonus && mappedStops.length) {
+    if (!selectedActivityId && showBonus && mappedStops.length) {
       const bonusKey = JSON.stringify(mappedStops.map(({ item }) => [item.coords.lat, item.coords.lng]));
       let storesPromise = bonusCache.current.get(bonusKey);
       if (!storesPromise) {
@@ -326,8 +442,33 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
         if (!cancelled) console.warn('近くのBónusを表示できませんでした。', error);
       });
     }
+    if (!selectedActivityId && showChargers && mappedStops.length) {
+      const hotelKey = JSON.stringify(mappedStops.map(({ item }) => [item.id, item.coords.lat, item.coords.lng]));
+      let chargersPromise = chargerCache.current.get(hotelKey);
+      if (!chargersPromise) {
+        chargersPromise = searchEvChargers(window.google.maps, mappedStops.map(({ item }) => item));
+        chargerCache.current.set(hotelKey, chargersPromise);
+      }
+      chargersPromise.then((chargers) => {
+        if (cancelled) return;
+        chargers.forEach((charger) => {
+          const marker = createMapMarker(window.google.maps, mapRef.current, charger.coords, {
+            className: 'map-charger-marker',
+            text: '⚡',
+            title: `${charger.title}の詳細を表示`,
+            onClick: () => setSelection({ type: 'charger', item: charger }),
+          });
+          overlays.current.push(marker);
+        });
+      }).catch((error) => {
+        if (!cancelled) console.warn('宿泊先周辺のEV充電器を表示できませんでした。', error);
+      });
+    }
     if (routePoints.length > 1) {
-      mapRef.current.fitBounds(bounds, 80);
+      if (selectedActivityId && !selectedStart) {
+        const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
+        if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
+      } else mapRef.current.fitBounds(bounds, 80);
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
@@ -403,34 +544,41 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
             throw new Error('ルートが見つかりませんでした');
           }
           onTravelTimesChange(travelTimes);
-          const polylineOptions = (strokeColor, zIndex = 2) => ({ strokeColor, strokeOpacity: 1, strokeWeight: 5, zIndex });
           const routeCasingOptions = { strokeColor: '#303841', strokeOpacity: 0.42, strokeWeight: 8, zIndex: 1 };
-          const hasLegPaths = varyRouteColors && fallbackDestinationIndexes.length === 0
-            && drivingRoutes.length === 1 && drivingRoutes[0].legs?.every((leg) => leg.path?.length);
-          const routeLines = hasLegPaths
-            ? drivingRoutes[0].legs.flatMap((leg, index) => {
-              const path = leg.path;
-              const color = routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, true);
-              return [
-                new window.google.maps.Polyline({ path, ...routeCasingOptions }),
-                new window.google.maps.Polyline({ path, ...polylineOptions(color) }),
-              ];
-            })
-            : drivingRoutes.flatMap((route, index) => {
-              const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
-              const activityIndex = routeStops[destinationIndex]?.activityIndex ?? destinationIndex;
-              const coloredLines = route.createPolylines({
-                polylineOptions: polylineOptions(routeColorForIndex(activityIndex, varyRouteColors)),
-              });
-              if (!varyRouteColors) return coloredLines;
-              const casingLines = route.createPolylines({ polylineOptions: routeCasingOptions });
-              return [...casingLines, ...coloredLines];
+          const routeLegs = routeLegsForDisplay(
+            routeStops,
+            drivingRoutes,
+            fallbackDestinationIndexes,
+            (index) => routeColorForIndex(index, varyRouteColors),
+          );
+          const visibleLegs = selectedActivityId
+            ? routeLegs.filter((leg) => selectedStart && leg.destinationIndex === selectedDestinationIndex)
+            : routeLegs;
+          const routeChunks = varyRouteColors && !selectedActivityId
+            ? splitOverlappingRouteLegs(visibleLegs)
+            : visibleLegs.map((leg) => ({ ...leg, shared: false, sharedCount: 1, sharedIndex: 0 }));
+          const routeLines = routeChunks.flatMap((chunk) => {
+            if (!chunk.path?.length) return [];
+            const casing = new window.google.maps.Polyline({ path: chunk.path, ...routeCasingOptions });
+            const colored = new window.google.maps.Polyline({
+              path: chunk.path,
+              strokeColor: chunk.color,
+              strokeOpacity: chunk.shared ? 0 : 1,
+              strokeWeight: 5,
+              zIndex: 2,
+              icons: chunk.shared ? [{
+                icon: { path: 'M 0,-1 0,1', strokeColor: chunk.color, strokeOpacity: 1, strokeWeight: 5, scale: 4 },
+                offset: `${chunk.sharedIndex * 12}px`,
+                repeat: `${chunk.sharedCount * 12}px`,
+              }] : undefined,
             });
+            return [casing, colored];
+          });
           routeLines.forEach((routeLine) => {
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
           });
-          if (drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
+          if (!selectedActivityId && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
           setRouteStatus(missingLegs.length ? 'partial' : 'ready');
         } catch (error) {
           if (cancelled) return;
@@ -446,17 +594,19 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [day, previousDay, mapStatus, onMapPick, onTravelTimesChange, showBonus, varyRouteColors]);
+  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, showBonus, showChargers, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
       <span className="map-key-icon"><MapPin size={18} /></span>
       <span>
-        <strong>{authorizationError ? '地図を読み込めませんでした' : '地図を利用できません'}</strong>
-        <small>{authorizationError ? '地図の接続を確認してください' : '場所検索と地図の利用には接続が必要です'}</small>
+        <strong>{offline ? 'オフラインで旅程を表示しています' : authorizationError ? '地図を読み込めませんでした' : '地図を利用できません'}</strong>
+        <small>{offline ? '地図・検索・ルート案内はオンライン時に利用できます' : authorizationError ? '地図の接続を確認してください' : '場所検索と地図の利用には接続が必要です'}</small>
       </span>
     </div>
   );
+  const detailTravelTime = resolvedSelection?.type === 'activity'
+    ? travelTimes[resolvedSelection.activityId] : null;
 
   if (!apiKey) {
     return (
@@ -470,17 +620,27 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
         <svg className="route-line" viewBox="0 0 600 760" preserveAspectRatio="none" aria-hidden="true">
           <path d="M146 180 C220 230, 194 340, 326 360 S440 510, 370 630" />
         </svg>
-        {day.activities.slice(0, 4).map((item, index) => (
+        {day.activities.slice(0, 4).filter((item, index, visible) => {
+          if (!selectedActivityId) return true;
+          const selectedIndex = day.activities.findIndex((activity) => activity.id === selectedActivityId);
+          return item.id === selectedActivityId || (selectedIndex > 0 && item.id === day.activities[selectedIndex - 1]?.id);
+        }).map((item) => {
+          const index = day.activities.findIndex((activity) => activity.id === item.id);
+          const color = routeColorForIndex(index, varyRouteColors);
+          return (
           <button
             className={`map-pin pin-${index + 1}`}
             key={item.id}
-            style={{ '--pin-color': index === 0 ? '#FF5722' : '#303841' }}
-            onClick={() => setSelection({ type: 'activity', activityId: item.id })}
+            style={{ '--pin-color': color, color, backgroundColor: '#ffffff' }}
+            onClick={() => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
+              ? null : { type: 'activity', activityId: item.id })}
             aria-label={item.title}
           >{index + 1}</button>
-        ))}
+          );
+        })}
         {accessCard()}
-        <MapDetailCard selection={resolvedSelection} onClose={() => setSelection(null)} onGuide={onGuide} />
+        <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime?.fromPreviousDay ? null : detailTravelTime}
+          onClose={() => setSelection(null)} onGuide={onGuide} />
       </div>
     );
   }
@@ -492,7 +652,13 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, v
       {mapStatus === 'ready' && routeStatus === 'loading' && <span className="map-loading">ルートを検索しています…</span>}
       {mapStatus === 'ready' && routeStatus === 'error' && <span className="map-loading map-route-error">ルートを表示できません</span>}
       {mapStatus === 'ready' && routeStatus === 'partial' && <span className="map-route-note">一部の移動ルートを計算できません</span>}
-      <MapDetailCard selection={resolvedSelection} onClose={() => setSelection(null)} onGuide={onGuide} />
+      <button className={`map-location-button ${locationStatus === 'ready' ? 'is-active' : ''}`} onClick={showCurrentLocation}
+        aria-label="現在地を表示" title="現在地を表示" disabled={locationStatus === 'locating'}>
+        {locationStatus === 'locating' ? <LoaderCircle className="location-spinner" size={19} /> : <LocateFixed size={19} />}
+      </button>
+      {locationStatus === 'error' && <span className="map-location-error">現在地を取得できません</span>}
+      <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime?.fromPreviousDay ? null : detailTravelTime}
+        onClose={() => setSelection(null)} onGuide={onGuide} />
     </div>
   );
 }
@@ -545,7 +711,7 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete, onGuide }) {
+function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete, onGuide, onSelect }) {
   const {
     attributes,
     listeners,
@@ -561,12 +727,16 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
       <div className="stop-time">{item.time || '時間未定'}</div>
       <div className="stop-track">
         <span className="stop-number" style={{
-          backgroundColor: routeColorForIndex(index, varyRouteColors),
-          color: routeTextColor(routeColorForIndex(index, varyRouteColors)),
+          backgroundColor: '#ffffff',
+          color: routeColorForIndex(index, varyRouteColors),
         }}>{index + 1}</span>
-        {index < count - 1 && <span className="stop-rule" />}
+        {index < count - 1 && <span className="stop-rule" style={{ backgroundColor: routeColorForIndex(index + 1, varyRouteColors) }} />}
       </div>
-      <div className="stop-copy">
+      <div className="stop-copy" tabIndex="0" aria-label={`${item.title}までのルートを地図で表示`}
+        onClick={(event) => { if (!event.target.closest('button, a, input, textarea, select')) onSelect(item); }}
+        onKeyDown={(event) => {
+          if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); onSelect(item); }
+        }}>
         {travelTime && <div className={`travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}
           title={travelTime.unavailable ? 'この地点までの移動ルートを計算できません。地点や移動手段を確認してください。' : undefined}>
           <strong>{travelTime.unavailable
@@ -599,7 +769,7 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
   );
 }
 
-function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide }) {
+function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -627,7 +797,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
         ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
             count={day.activities.length} travelTime={travelTimes[item.id]} varyRouteColors={varyRouteColors}
-            onEdit={onEdit} onDelete={onDelete} onGuide={onGuide} />)}
+            onEdit={onEdit} onDelete={onDelete} onGuide={onGuide} onSelect={onSelect} />)}
         </SortableContext>}
         {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
       </div>
@@ -642,7 +812,7 @@ function Timeline({ day, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, 
   );
 }
 
-function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSearchResult }) {
+function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, setDayIndex, open, setOpen, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
   const touch = useRef(null);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -703,7 +873,7 @@ function ItinerarySheet({ trip, day, travelTimes, varyRouteColors, dayIndex, set
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
       <Timeline day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
-        onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} />
+        onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} onSelect={onSelect} />
     </section>
   );
 }
@@ -909,6 +1079,7 @@ function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
 function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
   const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
+  const online = useOnlineStatus();
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
   const apiKey = bundledApiKey;
@@ -922,6 +1093,7 @@ function App() {
   const [mapFocus, setMapFocus] = useState(null);
   const [modal, setModal] = useState(null);
   const [reader, setReader] = useState(null);
+  const [offlineSave, setOfflineSave] = useState({ tripId: null, status: 'idle', message: '' });
   const trip = trips.find((item) => item.id === selectedId) || sortedTrips[0];
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
 
@@ -953,6 +1125,7 @@ function App() {
   const deleteTrip = (id) => {
     if (!confirm('この旅行を削除しますか？')) return;
     const remaining = trips.filter((item) => item.id !== id);
+    removeOfflineTrip(id);
     setTrips(remaining);
     if (id === selectedId) { setSelectedId(remaining[0]?.id); setDayIndex(0); }
   };
@@ -965,11 +1138,40 @@ function App() {
     setModal({ type: 'day', day: newDay });
   };
   const mapPick = useCallback((place) => setModal({ type: 'activity', activity: { time: '10:00', title: '', notes: '', ...place } }), []);
+  const saveCurrentTripOffline = async () => {
+    if (!trip || offlineSave.status === 'saving') return;
+    setOfflineSave({ tripId: trip.id, status: 'saving', message: 'オフライン保存を準備しています…' });
+    try {
+      const saved = await saveTripOffline(trip, (message) => setOfflineSave({ tripId: trip.id, status: 'saving', message }));
+      const complete = isOfflineTripComplete(saved, trip);
+      const missing = [
+        !saved.shellReady && 'アプリ本体',
+        !saved.documentsFresh && '最新のガイド',
+        saved.mediaSaved !== saved.mediaTotal && `画像・添付（${saved.mediaSaved}/${saved.mediaTotal}件）`,
+      ].filter(Boolean);
+      setOfflineSave({
+        tripId: trip.id,
+        status: complete ? 'saved' : 'partial',
+        message: complete
+          ? 'この旅行を端末に保存しました'
+          : `旅程データは保存しましたが、${missing.join('・')}を保存できませんでした。オンラインで再度お試しください`,
+      });
+    } catch (error) {
+      setOfflineSave({ tripId: trip.id, status: 'error', message: error.message || 'オフライン保存に失敗しました' });
+    }
+  };
 
   useEffect(() => { setDayIndex(0); }, [selectedId]);
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
 
   if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
+
+  const storedOfflineManifest = offlineTripManifest(trip.id);
+  const offlineComplete = isOfflineTripComplete(storedOfflineManifest, trip);
+  const offlinePartial = Boolean(storedOfflineManifest) && !offlineComplete;
+  const offlineButtonLabel = offlineComplete
+    ? 'オフライン保存済み。もう一度保存'
+    : offlinePartial ? 'オフライン保存を完了する' : 'この旅行をオフライン保存';
 
   return (
     <main className={`app-shell ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
@@ -983,27 +1185,42 @@ function App() {
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
           <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><BookOpen size={20} /></button>
+          <button className={`icon-button offline-save-button ${offlineComplete ? 'is-saved' : offlinePartial ? 'is-partial' : ''}`}
+            onClick={saveCurrentTripOffline} disabled={!online || offlineSave.status === 'saving'}
+            aria-label={offlineButtonLabel} title={online ? offlineButtonLabel : 'オンライン時に保存できます'}>
+            {offlineSave.status === 'saving' && offlineSave.tripId === trip.id
+              ? <LoaderCircle className="offline-save-spinner" size={19} />
+              : offlineComplete ? <Check size={19} /> : offlinePartial ? <CircleAlert size={19} /> : <Download size={19} />}
+          </button>
           <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
           <button className="icon-button timeline-toggle" onClick={() => setTimelineOpen((open) => !open)}
             aria-label={timelineOpen ? '旅程を閉じる' : '旅程を開く'} title={timelineOpen ? '旅程を閉じる' : '旅程を開く'}>
             {timelineOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
           </button>
         </header>
-        <SearchBar apiKey={apiKey} onResult={mapPick} />
-        <GoogleMap apiKey={apiKey} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
-          onTravelTimesChange={setTravelTimes}
-          varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} focusRequest={mapFocus}
+        {online && <SearchBar apiKey={apiKey} onResult={mapPick} />}
+        <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
+          onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
+          varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
           onGuide={(activity) => setReader({ trip, activity })} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
         <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
+        {offlineSave.tripId === trip.id && offlineSave.message && <div className={`offline-save-status is-${offlineSave.status}`} role="status">
+          {offlineSave.status === 'saving' && <LoaderCircle className="offline-save-spinner" size={15} />}
+          {offlineSave.message}
+        </div>}
       </section>
       <ItinerarySheet trip={trip} day={day} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} open={sheetOpen} setOpen={setSheetOpen} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })}
+      onSelect={(activity) => {
+        setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'toggle' });
+        if (window.matchMedia('(max-width: 820px)').matches) setSheetOpen(false);
+      }}
       onSearchResult={({ activity, dayIndex: resultDayIndex }) => {
         setDayIndex(resultDayIndex);
-        setMapFocus({ activityId: activity.id, requestId: uid() });
+        setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'select' });
         if (window.matchMedia('(max-width: 820px)').matches) setSheetOpen(false);
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}

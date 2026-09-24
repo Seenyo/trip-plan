@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ATTACHMENT_URL_TTL_SECONDS, attachmentUrl } from './travelDocuments';
+import { offlineAttachmentBlob } from './offlineTrip';
 
 export default function PlanImage({ image, className = '', eager = false }) {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
+  const localUrl = useRef(null);
   const path = typeof image === 'string' ? image : image?.path;
   const alt = typeof image === 'string' ? '予定の写真' : image?.alt || '予定の写真';
 
@@ -13,17 +15,36 @@ export default function PlanImage({ image, className = '', eager = false }) {
     if (!path) return undefined;
     let active = true;
     let timer;
+    const replaceLocalUrl = (next = null) => {
+      if (localUrl.current) URL.revokeObjectURL(localUrl.current);
+      localUrl.current = next;
+    };
     const refresh = async () => {
       clearTimeout(timer);
       let delay = 60000;
       try {
-        const signedUrl = await attachmentUrl(path);
+        let signedUrl = navigator.onLine ? await attachmentUrl(path) : null;
+        if (!signedUrl) {
+          const blob = await offlineAttachmentBlob(path);
+          if (blob) {
+            if (!active) return;
+            signedUrl = URL.createObjectURL(blob);
+            replaceLocalUrl(signedUrl);
+          }
+        } else replaceLocalUrl();
         if (!active) return;
         setUrl(signedUrl);
         setFailed(!signedUrl);
-        if (signedUrl) delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
+        if (signedUrl && !localUrl.current) delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
       } catch {
-        if (active) setFailed(true);
+        const blob = await offlineAttachmentBlob(path).catch(() => null);
+        if (!active) return;
+        if (blob) {
+          const local = URL.createObjectURL(blob);
+          replaceLocalUrl(local);
+          setUrl(local);
+          setFailed(false);
+        } else setFailed(true);
       }
       if (active) timer = setTimeout(refresh, delay);
     };
@@ -35,6 +56,7 @@ export default function PlanImage({ image, className = '', eager = false }) {
     return () => {
       active = false;
       clearTimeout(timer);
+      replaceLocalUrl();
       window.removeEventListener('online', refresh);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', visible);
