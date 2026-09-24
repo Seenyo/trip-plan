@@ -13,7 +13,7 @@ npm run dev
 
 ## Google Maps
 
-The map and place search use a Google Maps JavaScript API key configured when the app starts or builds. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions and nearby Bónus supermarket pins for Iceland days; Routes API draws driving or walking routes and estimates travel time between stops.
+The map and place search use a Google Maps JavaScript API key configured when the app starts or builds. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions, nearby Bónus supermarket pins for Iceland days, and the three closest EV chargers within 10km of a lodging stop. Routes API draws driving or walking routes and estimates travel time between stops. Clicking a stop focuses its incoming same-day route; shared route sections alternate their point colors as short dashes. The current-location control requests browser location access only when pressed.
 
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
@@ -49,7 +49,7 @@ Open **地点ガイド** on an itinerary stop, or the book button beside the tri
 
 Documents live in `travel_documents`, separate from itinerary writes. A revision comparison prevents a stale editor from overwriting someone else's changes. Unsaved drafts remain on the current browser/device and can be restored on reopening. The editor does not automatically sync offline drafts.
 
-Opening a guide/notebook online caches all document text for that trip on this browser. Production builds include a service worker that caches the app shell, so a previously visited app can reopen offline; Google Maps/search/routes, attachments and external websites require connectivity. The map cannot be used offline. Browser storage may be cleared or unavailable, so this is a convenience rather than a backup.
+Use the download button beside the trip title while online to save the selected trip for offline use. It stores the itinerary, all guide/notebook text, itinerary photos, notebook images and PDFs on that device, and asks the browser to keep the storage when supported. Production builds cache the app shell, so the saved trip can reopen with no connection. Google Maps, place search, routes, EV/Bónus discovery and external links remain online-only. Saving again refreshes the local copy. Browser storage can still be cleared by the user or operating system, so this is a travel copy rather than a permanent backup.
 
 Images (JPEG/PNG/WebP/GIF) and PDFs up to 10MB are stored in the non-public `travel-attachments` bucket and opened using short-lived signed URLs. The same bucket stores up to eight photos attached directly to each itinerary plan; those photos appear in the timeline and map detail card. **The workspace still has no authentication: anyone who has the site and public client configuration can read/edit the shared trips, documents and attachments. The bucket is not a personal vault for sensitive reservation/identity information.** Removed blocks and detached plan photos retain uploaded files rather than permanently deleting attachments.
 

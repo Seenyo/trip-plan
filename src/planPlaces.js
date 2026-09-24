@@ -46,6 +46,12 @@ const locationLiteral = (location) => {
 
 const isBonusStore = (place) => normalizeText(place.displayName).replace(/[^a-z]/g, '').startsWith('bonus');
 
+export const isLodgingActivity = (activity) => Boolean(activity?.coords) && (
+  activity.category === 'lodging'
+  || /(?:^|-)stay(?:-|$)/i.test(activity.id || '')
+  || /hotel|hostel|guesthouse|guest house|resort|lodge|igloo|宿泊|ホテル|旅館/i.test(activity.title || '')
+);
+
 export async function searchBonusStores(maps, activities) {
   const coordinates = activities.map((activity) => activity.coords).filter(Boolean);
   if (!coordinates.length) return [];
@@ -79,4 +85,43 @@ export async function searchBonusStores(maps, activities) {
     });
   });
   return [...unique.values()];
+}
+
+export async function searchEvChargers(maps, activities) {
+  const hotels = activities.filter(isLodgingActivity);
+  if (!hotels.length) return [];
+  const { Place, SearchNearbyRankPreference } = await maps.importLibrary('places');
+  const responses = await Promise.allSettled(hotels.map(async (hotel) => {
+    const result = await Place.searchNearby({
+      fields: ['id', 'displayName', 'formattedAddress', 'location', 'googleMapsURI'],
+      includedPrimaryTypes: ['electric_vehicle_charging_station'],
+      locationRestriction: { center: hotel.coords, radius: 10000 },
+      rankPreference: SearchNearbyRankPreference?.DISTANCE || 'DISTANCE',
+      language: 'ja',
+      region: 'is',
+      maxResultCount: 3,
+    });
+    return (result.places || []).map((place) => ({ place, hotel }));
+  }));
+  const unique = new Map();
+  responses.flatMap((response) => response.status === 'fulfilled' ? response.value : []).forEach(({ place, hotel }) => {
+    const coords = locationLiteral(place.location);
+    if (!coords) return;
+    const distanceFromHotelKm = distanceKm(hotel.coords, coords);
+    if (distanceFromHotelKm > 10) return;
+    const id = place.id || `${coords.lat},${coords.lng}`;
+    const current = unique.get(id);
+    if (current && current.distanceFromHotelKm <= distanceFromHotelKm) return;
+    unique.set(id, {
+      id,
+      title: place.displayName || 'EV充電スポット',
+      location: place.formattedAddress || '',
+      coords,
+      googleMapsURI: place.googleMapsURI || '',
+      hotelId: hotel.id,
+      hotelTitle: hotel.title,
+      distanceFromHotelKm,
+    });
+  });
+  return [...unique.values()].sort((a, b) => a.distanceFromHotelKm - b.distanceFromHotelKm);
 }

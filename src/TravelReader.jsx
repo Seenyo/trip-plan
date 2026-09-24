@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowDown, ArrowUp, BookOpen, Check, ChevronRight, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
 import { ATTACHMENT_URL_TTL_SECONDS, attachmentUrl, cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
+import { offlineAttachmentBlob } from './offlineTrip';
 import './travelReader.css';
 
 const blockTypes = { heading: '見出し', text: '文章', bullets: '箇条書き', checklist: 'チェックリスト', link: 'リンク', table: '表' };
@@ -9,26 +10,45 @@ const draftKey = (id) => `roam.document-draft.v1.${id}`;
 function Attachment({ block }) {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
+  const localUrl = useRef(null);
   useEffect(() => {
     let active = true;
     let request = 0;
     let timer;
     setUrl(null); setFailed(false);
+    const replaceLocalUrl = (next = null) => {
+      if (localUrl.current) URL.revokeObjectURL(localUrl.current);
+      localUrl.current = next;
+    };
     const refresh = async () => {
       const currentRequest = ++request;
       clearTimeout(timer);
       let delay = 60000;
       try {
-        const value = await attachmentUrl(block.path);
+        let value = navigator.onLine ? await attachmentUrl(block.path) : null;
+        if (!value) {
+          const blob = await offlineAttachmentBlob(block.path);
+          if (blob) {
+            if (!active || currentRequest !== request) return;
+            value = URL.createObjectURL(blob);
+            replaceLocalUrl(value);
+          }
+        } else replaceLocalUrl();
         if (!active || currentRequest !== request) return;
         if (value) {
           setUrl(value); setFailed(false);
           // Renew with a five-minute margin; resume events also cover suspended tabs.
-          delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
+          if (!localUrl.current) delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
         }
       } catch {
         if (!active || currentRequest !== request) return;
-        setFailed(true);
+        const blob = await offlineAttachmentBlob(block.path).catch(() => null);
+        if (!active || currentRequest !== request) return;
+        if (blob) {
+          const local = URL.createObjectURL(blob);
+          replaceLocalUrl(local);
+          setUrl(local); setFailed(false);
+        } else setFailed(true);
       }
       if (active && currentRequest === request) timer = setTimeout(refresh, delay);
     };
@@ -38,7 +58,7 @@ function Attachment({ block }) {
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', visible);
     return () => {
-      active = false; clearTimeout(timer);
+      active = false; clearTimeout(timer); replaceLocalUrl();
       window.removeEventListener('online', refresh);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', visible);
@@ -186,7 +206,7 @@ export default function TravelReader({ trip, activity, onClose }) {
       <div className="document-blocks">{doc.blocks.map((block, i) => editing ? <section className="block-editor" key={block.id}><div className="block-editor-heading"><span>{blockTypes[block.type] || (block.type === 'image' ? '画像' : 'PDF')}</span><button disabled={i === 0 || busy} aria-label={`${i + 1}番目のブロックを上へ`} onClick={() => move(i, -1)}><ArrowUp size={17} /></button><button disabled={i === doc.blocks.length - 1 || busy} aria-label={`${i + 1}番目のブロックを下へ`} onClick={() => move(i, 1)}><ArrowDown size={17} /></button><button disabled={busy} aria-label={`${i + 1}番目のブロックを削除`} onClick={() => { if (confirm('このブロックを削除しますか？')) change({ ...doc, blocks: doc.blocks.filter((b) => b.id !== block.id) }); }}><Trash2 size={17} /></button></div><fieldset disabled={busy}><EditBlock block={block} onChange={(patch) => updateBlock(block.id, patch)} /></fieldset></section> : <ReadBlock key={block.id} block={block} disabled={busy || loading} onCheck={(index) => { if (!busy) updateBlock(block.id, { items: block.items.map((it, i) => i === index ? { ...it, checked: !it.checked } : it) }); }} />)}</div>
       {editing && <div className="add-block-menu"><p>内容を追加</p>{Object.entries(blockTypes).map(([type, label]) => <button key={type} disabled={busy || doc.blocks.length >= 500} onClick={() => change({ ...doc, blocks: [...doc.blocks, newBlock(type)] })}><Plus size={16} />{label}</button>)}<button disabled={busy || offline || doc.blocks.length >= 500} onClick={() => fileInput.current.click()}><Upload size={16} />画像・PDF</button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" hidden onChange={attach} /><small>添付は10MBまで。この共有アプリを開く人が閲覧できます。個人情報を含む書類はご注意ください。</small></div>}
       {!activity && <section className="reader-pages"><h2>小ページ</h2>{children.map((child) => <button key={child.id} disabled={busy} onClick={() => goTo(child)}><FileText size={18} /><span>{child.title || '無題のページ'}</span><ChevronRight size={18} /></button>)}<button className="add-page" disabled={busy || offline} onClick={addPage}><Plus size={18} />小ページを追加</button></section>}
-      <footer className="reader-footer">{!editing && <button className="reader-edit" disabled={busy} onClick={() => setEditing(true)}>このページを編集</button>}{dirty && !editing && <button className="reader-edit" disabled={busy} onClick={() => save()}><Check size={16} />変更を保存</button>}<p>保存した文章は電波がなくても読めます。画像・PDF・リンク先はオンラインで開きます。</p></footer>
+      <footer className="reader-footer">{!editing && <button className="reader-edit" disabled={busy} onClick={() => setEditing(true)}>このページを編集</button>}{dirty && !editing && <button className="reader-edit" disabled={busy} onClick={() => save()}><Check size={16} />変更を保存</button>}<p>端末に保存した旅行は、文章・画像・PDFを電波がなくても開けます。外部リンクはオンラインで開きます。</p></footer>
       </>}
     </div></div>
   </section></div>, document.body);
