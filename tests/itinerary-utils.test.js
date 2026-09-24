@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  distanceKmBetween,
   formatTravelDistance,
   formatTravelDuration,
+  previousDayRouteOrigin,
   reorderActivitiesIntoTimeSlots,
   ROUTE_POINT_COLORS,
   routeColorForIndex,
@@ -44,6 +46,25 @@ describe('itinerary helpers', () => {
     expect(travelModeForActivity({})).toBe('DRIVING');
     expect(travelModeForActivity({ travelMode: 'DRIVING' })).toBe('DRIVING');
     expect(travelModeForActivity({ travelMode: 'WALKING' })).toBe('WALKING');
+  });
+
+  it('uses the previous day final routable stop as the next day route origin', () => {
+    const hotel = { id: 'hotel', coords: { lat: 64.13, lng: -16.02 } };
+    const previousDay = { activities: [
+      { id: 'sight', coords: { lat: 64.08, lng: -16.23 } },
+      hotel,
+      { id: 'note-without-location' },
+    ] };
+    const day = { activities: [{ id: 'first-stop', coords: { lat: 64.25, lng: -15.21 } }] };
+    expect(previousDayRouteOrigin(day, previousDay)).toBe(hotel);
+    expect(distanceKmBetween(hotel.coords, day.activities[0].coords)).toBeLessThan(900);
+  });
+
+  it('does not connect days across flights or days that opt out of driving', () => {
+    const tokyo = { activities: [{ id: 'haneda', coords: { lat: 35.55, lng: 139.77 } }] };
+    const iceland = { activities: [{ id: 'kef', coords: { lat: 63.99, lng: -22.63 } }] };
+    expect(previousDayRouteOrigin(iceland, tokyo)).toBeNull();
+    expect(previousDayRouteOrigin({ ...iceland, drivingFromPrevious: false }, tokyo)).toBeNull();
   });
 
   it('assigns a lone successful fallback route to its actual destination', () => {

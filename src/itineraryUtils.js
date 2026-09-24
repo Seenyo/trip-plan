@@ -16,6 +16,26 @@ export const sortTripsByStartDate = (trips) => trips
   })
   .map(({ trip }) => trip);
 
+export const distanceKmBetween = (start, end) => {
+  if (![start?.lat, start?.lng, end?.lat, end?.lng].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  const toRadians = (degrees) => degrees * (Math.PI / 180);
+  const latitudeDelta = toRadians(end.lat - start.lat);
+  const longitudeDelta = toRadians(end.lng - start.lng);
+  const startLatitude = toRadians(start.lat);
+  const endLatitude = toRadians(end.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
+export const previousDayRouteOrigin = (day, previousDay) => {
+  if (!day || !previousDay || day.drivingFromPrevious === false) return null;
+  const firstDestination = day.activities?.find((item) => item.coords && item.route !== false);
+  const previousActivity = previousDay.activities?.filter((item) => item.coords && item.route !== false).at(-1);
+  if (!firstDestination || !previousActivity) return null;
+  return distanceKmBetween(previousActivity.coords, firstDestination.coords) < 900 ? previousActivity : null;
+};
+
 export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) => {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0
     || fromIndex >= activities.length || toIndex >= activities.length) return activities;
