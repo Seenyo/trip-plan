@@ -58,7 +58,7 @@ import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
 import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
-import { splitOverlappingRouteLegs } from './routePresentation';
+import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { uploadPlanImage } from './travelDocuments';
 import {
   formatTravelDistance,
@@ -545,22 +545,12 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
           }
           onTravelTimesChange(travelTimes);
           const routeCasingOptions = { strokeColor: '#303841', strokeOpacity: 0.42, strokeWeight: 8, zIndex: 1 };
-          const routeLegs = fallbackDestinationIndexes.length === 0 && drivingRoutes.length === 1 && drivingRoutes[0].legs?.length
-            ? drivingRoutes[0].legs.map((leg, index) => ({
-              id: routeStops[index + 1]?.id || `leg-${index}`,
-              path: leg.path,
-              destinationIndex: index + 1,
-              color: routeColorForIndex(routeStops[index + 1]?.activityIndex ?? index, varyRouteColors),
-            }))
-            : drivingRoutes.map((route, index) => {
-              const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
-              return {
-                id: routeStops[destinationIndex]?.id || `leg-${index}`,
-                path: route.path,
-                destinationIndex,
-                color: routeColorForIndex(routeStops[destinationIndex]?.activityIndex ?? destinationIndex, varyRouteColors),
-              };
-            });
+          const routeLegs = routeLegsForDisplay(
+            routeStops,
+            drivingRoutes,
+            fallbackDestinationIndexes,
+            (index) => routeColorForIndex(index, varyRouteColors),
+          );
           const visibleLegs = selectedActivityId
             ? routeLegs.filter((leg) => selectedStart && leg.destinationIndex === selectedDestinationIndex)
             : routeLegs;

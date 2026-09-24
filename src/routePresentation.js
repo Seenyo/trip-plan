@@ -54,3 +54,28 @@ export function splitOverlappingRouteLegs(legs) {
     return chunks;
   });
 }
+
+export function routeLegsForDisplay(routeStops, routes, fallbackDestinationIndexes, colorForIndex) {
+  const aggregateRoute = routes[0];
+  const canUseIndividualLegs = fallbackDestinationIndexes.length === 0
+    && routes.length === 1
+    && aggregateRoute?.legs?.length
+    && aggregateRoute.legs.every((leg) => leg.path?.length);
+  if (canUseIndividualLegs) {
+    return aggregateRoute.legs.map((leg, index) => ({
+      id: routeStops[index + 1]?.id || `leg-${index}`,
+      path: leg.path,
+      destinationIndex: index + 1,
+      color: colorForIndex(routeStops[index + 1]?.activityIndex ?? index),
+    }));
+  }
+  return routes.map((route, index) => {
+    const destinationIndex = fallbackDestinationIndexes[index] ?? index + 1;
+    return {
+      id: routeStops[destinationIndex]?.id || `leg-${index}`,
+      path: route.path,
+      destinationIndex,
+      color: colorForIndex(routeStops[destinationIndex]?.activityIndex ?? destinationIndex),
+    };
+  });
+}

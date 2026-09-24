@@ -13,7 +13,22 @@ function manifestMatchesTrip(manifest, currentTrip) {
   try { return JSON.stringify(manifest?.trip) === JSON.stringify(currentTrip); } catch { return false; }
 }
 
-export function isOfflineTripComplete(manifest, currentTrip = manifest?.trip) {
+function documentsSnapshot(documents) {
+  return JSON.stringify((documents || []).map((document) => ({
+    id: document.id,
+    revision: document.revision || 0,
+    attachments: (document.blocks || [])
+      .filter((block) => ['image', 'file'].includes(block.type) && block.path)
+      .map((block) => ({ id: block.id, type: block.type, path: block.path }))
+      .sort((a, b) => `${a.id}:${a.path}`.localeCompare(`${b.id}:${b.path}`)),
+  })).sort((a, b) => String(a.id).localeCompare(String(b.id))));
+}
+
+export function isOfflineTripComplete(
+  manifest,
+  currentTrip = manifest?.trip,
+  currentDocuments = currentTrip?.id ? cachedDocuments(currentTrip.id) : [],
+) {
   return Boolean(
     manifest?.shellReady
     && manifest.documentsFresh
@@ -21,6 +36,7 @@ export function isOfflineTripComplete(manifest, currentTrip = manifest?.trip) {
     && Number.isInteger(manifest.mediaSaved)
     && manifest.mediaSaved === manifest.mediaTotal
     && manifestMatchesTrip(manifest, currentTrip)
+    && manifest.documentsSnapshot === documentsSnapshot(currentDocuments)
   );
 }
 
@@ -79,8 +95,7 @@ export async function saveTripOffline(trip, onProgress = () => {}) {
   let documentsFresh = false;
   try {
     documents = await loadDocuments(trip.id);
-    cacheDocuments(trip.id, documents);
-    documentsFresh = true;
+    documentsFresh = cacheDocuments(trip.id, documents);
   } catch { /* Keep any documents already stored on this device. */ }
 
   const paths = tripMediaPaths(trip, documents);
@@ -101,6 +116,7 @@ export async function saveTripOffline(trip, onProgress = () => {}) {
     savedAt: new Date().toISOString(),
     documentCount: documents.length,
     documentsFresh,
+    documentsSnapshot: documentsSnapshot(documents),
     mediaTotal: paths.length,
     mediaSaved,
     shellReady,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitOverlappingRouteLegs } from '../src/routePresentation';
+import { routeLegsForDisplay, splitOverlappingRouteLegs } from '../src/routePresentation';
 
 describe('route presentation', () => {
   it('marks only shared sections and assigns alternating dash positions', () => {
@@ -16,5 +16,17 @@ describe('route presentation', () => {
       ['first', 2, 0], ['second', 2, 1],
     ]);
     expect(solo.map((chunk) => chunk.id)).toEqual(['first', 'second']);
+  });
+
+  it('uses the aggregate route when an individual leg has no path', () => {
+    const aggregatePath = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
+    const legs = routeLegsForDisplay(
+      [{ id: 'start', activityIndex: 0 }, { id: 'middle', activityIndex: 1 }, { id: 'end', activityIndex: 2 }],
+      [{ path: aggregatePath, legs: [{ path: aggregatePath }, { path: [] }] }],
+      [],
+      (index) => `color-${index}`,
+    );
+
+    expect(legs).toEqual([expect.objectContaining({ path: aggregatePath, destinationIndex: 1 })]);
   });
 });

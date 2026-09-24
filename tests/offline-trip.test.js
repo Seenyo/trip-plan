@@ -6,6 +6,7 @@ const completeManifest = {
   trip: { id: 'trip', days: [] },
   shellReady: true,
   documentsFresh: true,
+  documentsSnapshot: '[]',
   mediaTotal: 2,
   mediaSaved: 2,
 };
@@ -32,6 +33,14 @@ it('invalidates a complete save when the current trip has changed', () => {
     ...savedTrip,
     days: [{ id: 'day-1', activities: [{ id: 'new-stop' }] }],
   })).toBe(false);
+});
+
+it('invalidates a complete save when cached documents or attachments change', () => {
+  const documents = [{
+    id: 'notebook:trip', revision: 2,
+    blocks: [{ id: 'booking', type: 'file', path: 'trip/booking.pdf' }],
+  }];
+  expect(isOfflineTripComplete(completeManifest, completeManifest.trip, documents)).toBe(false);
 });
 
 it('removes a deleted trip from offline snapshots', () => {
