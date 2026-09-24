@@ -588,7 +588,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
           });
-          if (!selectedActivityId && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
+          if (!selectedActivityId && !selectedPreviousActivity && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
           setRouteStatus(missingLegs.length ? 'partial' : 'ready');
         } catch (error) {
           if (cancelled) return;
