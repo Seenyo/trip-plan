@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Trip App">
+  <rect width="64" height="64" rx="16" fill="#ff5722"/>
+  <path d="M25 21v-3a7 7 0 0 1 14 0v3" fill="none" stroke="#fff8ec" stroke-width="4" stroke-linecap="round"/>
+  <rect x="12" y="22" width="40" height="32" rx="9" fill="#fff8ec"/>
+  <path d="M18 23v30M46 23v30" stroke="#ffc7a6" stroke-width="3"/>
+  <circle cx="25" cy="36" r="2" fill="#303841"/>
+  <circle cx="39" cy="36" r="2" fill="#303841"/>
+  <path d="M28 43q4 4 8 0" fill="none" stroke="#303841" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="20" cy="42" r="2" fill="#ffb2a7" opacity=".85"/>
+  <circle cx="44" cy="42" r="2" fill="#ffb2a7" opacity=".85"/>
+  <path d="M48 9v5m-2.5-2.5h5" stroke="#d8f0ed" stroke-width="2" stroke-linecap="round"/>
+</svg>
