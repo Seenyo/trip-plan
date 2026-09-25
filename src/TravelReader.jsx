@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowDown, ArrowUp, BookOpen, Check, ChevronRight, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowDown, ArrowUp, BookOpen, Check, ChevronRight, FileText, Plus, StickyNote, Trash2, Upload, X } from 'lucide-react';
 import { ATTACHMENT_URL_TTL_SECONDS, attachmentUrl, cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
 import { offlineAttachmentBlob } from './offlineTrip';
 import './travelReader.css';
@@ -194,7 +194,7 @@ export default function TravelReader({ trip, activity, onClose }) {
   return createPortal(<div className="travel-reader-backdrop"><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="reader-title" className="travel-reader">
     <header className="reader-header"><button disabled={busy} onClick={() => stack.length ? goTo(docs.find((d) => d.id === stack.at(-1)), true) : close()} aria-label={stack.length ? '親ページに戻る' : '旅程に戻る'}><ArrowLeft size={22} /></button><div><span>{activity ? '地点ガイド' : '旅行ノート'}</span><strong>{trip.title}</strong></div><button className="reader-save" disabled={busy || loading} onClick={editing || dirty ? () => save() : () => setEditing(true)}>{busy ? '処理中…' : editing || dirty ? '保存' : '編集'}</button></header>
     <div ref={scroller} className="reader-scroll">
-      <div className="reader-content"><div className="reader-kicker"><BookOpen size={17} />{activity ? '訪れる前に、少しだけ' : 'この旅のためのノート'}<span>{offline ? 'オフライン' : '共有ノート'}</span></div>
+      <div className="reader-content"><div className="reader-kicker">{activity ? <BookOpen size={17} /> : <StickyNote size={17} />}{activity ? '訪れる前に、少しだけ' : 'この旅のためのノート'}<span>{offline ? 'オフライン' : '共有ノート'}</span></div>
       {editing ? <input className="reader-title-input" aria-label="ページタイトル" value={doc.title} onChange={(e) => change({ ...doc, title: e.target.value })} maxLength={300} /> : <h1 id="reader-title">{doc.title}</h1>}
       {editing && <span id="reader-title" className="sr-only">ページを編集</span>}
       {activity?.location && <p className="reader-location">{activity.location}</p>}

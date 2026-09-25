@@ -9,6 +9,7 @@ vi.mock('../src/useSharedWorkspace', () => ({
 }));
 
 it('keeps mobile swipes and plan deletion under deliberate controls', async () => {
+  vi.setSystemTime(new Date('2026-09-25T12:00:00'));
   localStorage.clear();
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn() });
   document.body.innerHTML = '<div id="root"></div>';
@@ -82,4 +83,5 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
 
   await act(async () => { window.__roamRoot.unmount(); });
   delete window.__roamRoot;
+  vi.useRealTimers();
 });

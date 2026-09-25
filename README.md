@@ -19,6 +19,8 @@ The base map uses Google's default road-map colors and clickable place icons. Go
 
 Tap a named place on the map or select a search result to add it to the itinerary or save it as a trip-specific bookmark. Bookmarks stay separate from dated plans, use the ご飯・自然・施設・その他 categories, and appear as small colored pins. The 候補 button opens a searchable, filterable list; selecting a saved place focuses it on the map. Bookmarks are stored with the trip in the shared workspace and in its offline copy.
 
+On opening, ROAM selects the nearest active or upcoming trip and the itinerary day closest to the device's local date. When every trip has ended, the home screen offers a new trip or a list of past trips. On phones, selecting a plan while the itinerary is half open keeps the map and timeline side by side and highlights that plan's route.
+
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
 ```text
