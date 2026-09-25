@@ -15,6 +15,8 @@ npm run dev
 
 The map and place search use a Google Maps JavaScript API key configured when the app starts or builds. Enable the **Maps JavaScript API**, **Places API (New)**, **Geocoding API**, and **Routes API**. Places API provides multilingual place suggestions, nearby Bónus supermarket pins for Iceland days, and the three closest EV chargers within 10km of a lodging stop. Routes API draws driving or walking routes and estimates travel time between stops. Clicking a stop focuses its incoming same-day route; shared route sections alternate their point colors as short dashes. The current-location control requests browser location access only when pressed.
 
+The base map uses Google's default road-map colors and clickable place icons. Google chooses which business labels to show at each zoom level; zoom in or use place search for businesses not labeled on the map. More control over point-of-interest density would require a Google Cloud map ID and a cloud-based map style.
+
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
 ```text

@@ -389,12 +389,8 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
         zoom: 12,
         disableDefaultUI: true,
         zoomControl: false,
+        clickableIcons: true,
         gestureHandling: 'greedy',
-        styles: [
-          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#76ABAE' }] },
-          { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
-        ],
       });
       mapRef.current.addListener('click', async (event) => {
         const requestId = ++mapPickRequest.current;
