@@ -34,6 +34,7 @@ import {
   LoaderCircle,
   MapPin,
   Navigation,
+  StickyNote,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -61,6 +62,7 @@ import { searchBonusStores, searchEvChargers, searchTripActivities } from './pla
 import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { namedPlaceFromMapClick } from './mapPlacePick';
+import { closestDayIndex, localDateISO, selectDefaultTrip } from './tripSelection';
 import { BOOKMARK_CATEGORIES, bookmarkCategory, findMatchingBookmark, removeTripBookmark, saveTripBookmark } from './bookmarks';
 import { uploadPlanImage } from './travelDocuments';
 import {
@@ -210,8 +212,9 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide, onAddBookmarkT
   }
   const activity = selection.item;
   const firstImage = activity.images?.[0];
-  return <article className={`map-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
+  return <article className={`map-detail-card activity-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
     <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
+    <button className="map-detail-guide" onClick={() => onGuide(activity)} aria-label={`${activity.title}の地点ガイドを開く`} title="地点ガイド"><BookOpen size={17} /></button>
     {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager />}
     <div className="map-detail-copy"><small>{activity.time || '時間未定'}</small><h2>{activity.title}</h2>
       {travelTime && <div className={`travel-time map-travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}>
@@ -221,13 +224,11 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide, onAddBookmarkT
         {!travelTime.unavailable && formatTravelDistance(travelTime.distanceMeters) && <small>· {formatTravelDistance(travelTime.distanceMeters)}</small>}
       </div>}
       {activity.location && <p>{activity.location}</p>}
-      {activity.notes && <p className="map-detail-notes">{activity.notes}</p>}
-      <button onClick={() => onGuide(activity)}><BookOpen size={14} />地点ガイドを見る</button>
     </div>
   </article>;
 }
 
-const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
+const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, compactViewport, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -522,7 +523,8 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
       } else if (selectedActivityId && !selectedStart) {
         const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
         if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
-      } else if (!preserveBookmarkView) mapRef.current.fitBounds(bounds, 80);
+      } else if (!preserveBookmarkView) mapRef.current.fitBounds(bounds,
+        selectedActivityId && compactViewport ? { top: 38, right: 42, bottom: 125, left: 42 } : 80);
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
@@ -648,7 +650,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors]);
+  }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors, compactViewport]);
 
   useEffect(() => {
     bookmarkMarkers.current.forEach((marker) => marker.setMap(null));
@@ -997,7 +999,7 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
   );
 }
 
-function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose, syncStatus }) {
+function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, onHome, open, onClose, syncStatus }) {
   const palette = ['#FF5722', '#76ABAE', '#F5F5F5'];
   return (
     <aside className={`trip-rail ${open ? 'rail-open' : ''}`}>
@@ -1016,6 +1018,7 @@ function TripRail({ trips, selectedId, onSelect, onAdd, onDelete, open, onClose,
         ))}
       </div>
       <button className="new-trip-button" onClick={onAdd}><CirclePlus size={19} /> 新しい旅行を作成</button>
+      {onHome && <button className="trip-home-button" onClick={() => { onHome(); onClose(); }}><ArrowLeft size={16} /> 旅行のホームに戻る</button>}
       <div className="rail-foot"><span>{['error', 'local'].includes(syncStatus) ? 'このブラウザに保存' : '共有ワークスペース'}</span><span className="saved-dot"><Check size={12} /> {syncStatus === 'saving' ? '同期中' : syncStatus === 'loading' ? '読み込み中' : ['error', 'local'].includes(syncStatus) ? 'ローカル' : '同期済み'}</span></div>
     </aside>
   );
@@ -1240,6 +1243,31 @@ function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onCl
   </Modal>;
 }
 
+function FinishedTripLanding({ trips, showPastTrips, onShowPastTrips, onOpenTrip, onCreate, loading }) {
+  return <main className="finished-trip-screen">
+    <div className="finished-trip-brand"><span className="brand-mark"><Navigation size={19} fill="currentColor" /></span><strong>ROAM</strong></div>
+    <section className="finished-trip-content">
+      {loading ? <p className="finished-trip-loading" role="status"><LoaderCircle size={22} className="offline-save-spinner" /> 旅行を読み込んでいます…</p>
+        : showPastTrips ? <>
+          <button className="finished-trip-back" onClick={() => onShowPastTrips(false)}><ArrowLeft size={17} /> 戻る</button>
+          <h1>過去の旅行</h1>
+          <p>見返したい旅行を選んでください。</p>
+          <div className="finished-trip-list">{trips.map((trip) => <button key={trip.id} onClick={() => onOpenTrip(trip.id)}>
+            <span><strong>{trip.title}</strong><small>{dateRange(trip)}</small></span><ChevronRight size={20} />
+          </button>)}</div>
+        </> : <>
+          <span className="finished-trip-symbol"><Navigation size={30} fill="currentColor" /></span>
+          <h1>{trips.length ? '予定されている旅行はありません' : '新しい旅行を始めましょう'}</h1>
+          <p>{trips.length ? 'これまでの旅行を見返すか、次の旅行を作成できます。' : '日付を決めて、行きたい場所を旅程に追加しましょう。'}</p>
+          <div className="finished-trip-actions">
+            <button className="finished-trip-primary" onClick={onCreate}><Plus size={19} /> 新しい旅行を追加</button>
+            {trips.length > 0 && <button className="finished-trip-secondary" onClick={() => onShowPastTrips(true)}>過去の旅行を見る <ChevronRight size={19} /></button>}
+          </div>
+        </>}
+    </section>
+  </main>;
+}
+
 function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
   const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
@@ -1248,8 +1276,11 @@ function App() {
   const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
   const apiKey = bundledApiKey;
   const sortedTrips = useMemo(() => sortTripsByStartDate(trips), [trips]);
-  const [selectedId, setSelectedId] = useState(() => sortTripsByStartDate(trips)[0]?.id);
-  const [dayIndex, setDayIndex] = useState(0);
+  const openingSelection = useRef(selectDefaultTrip(trips, localDateISO()));
+  const autoSelectOnLoad = useRef(true);
+  const [selectedId, setSelectedId] = useState(openingSelection.current?.tripId ?? null);
+  const [dayIndex, setDayIndex] = useState(openingSelection.current?.dayIndex ?? 0);
+  const [showPastTrips, setShowPastTrips] = useState(false);
   const [sheetStage, setSheetStage] = useState('peek');
   const [railOpen, setRailOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
@@ -1258,9 +1289,18 @@ function App() {
   const [modal, setModal] = useState(null);
   const [reader, setReader] = useState(null);
   const [offlineSave, setOfflineSave] = useState({ tripId: null, status: 'idle', message: '' });
-  const trip = trips.find((item) => item.id === selectedId) || sortedTrips[0];
+  const trip = selectedId ? trips.find((item) => item.id === selectedId) || sortedTrips[0] : null;
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
   const bookmarks = trip?.bookmarks || EMPTY_BOOKMARKS;
+
+  const selectTrip = useCallback((id) => {
+    autoSelectOnLoad.current = false;
+    const nextTrip = trips.find((item) => item.id === id);
+    setSelectedId(nextTrip?.id ?? null);
+    setDayIndex(nextTrip ? closestDayIndex(nextTrip, localDateISO()) : 0);
+    setMapFocus(null);
+    setShowPastTrips(false);
+  }, [trips]);
 
   const updateTrip = useCallback((updater) => {
     setTrips((current) => current.map((item) => item.id === trip.id ? updater(item) : item));
@@ -1282,6 +1322,7 @@ function App() {
     const firstDay = { id: uid(), date: form.startDate, title: '到着・最初の一日', note: '予定を詰めすぎず、余白を残しておきましょう。', activities: [] };
     const newTrip = { ...form, id: uid(), endDate: form.endDate || form.startDate, days: [firstDay] };
     setTrips((current) => [...current, newTrip]);
+    autoSelectOnLoad.current = false;
     setSelectedId(newTrip.id);
     setDayIndex(0);
     setModal(null);
@@ -1291,7 +1332,12 @@ function App() {
     const remaining = trips.filter((item) => item.id !== id);
     removeOfflineTrip(id);
     setTrips(remaining);
-    if (id === selectedId) { setSelectedId(remaining[0]?.id); setDayIndex(0); }
+    if (id === selectedId) {
+      autoSelectOnLoad.current = false;
+      const next = selectDefaultTrip(remaining, localDateISO());
+      setSelectedId(next?.tripId ?? null);
+      setDayIndex(next?.dayIndex ?? 0);
+    }
   };
   const addDay = () => {
     const currentDate = new Date(`${day.date}T12:00:00`);
@@ -1339,10 +1385,21 @@ function App() {
     }
   };
 
-  useEffect(() => { setDayIndex(0); }, [selectedId]);
+  useEffect(() => {
+    if (!autoSelectOnLoad.current || syncStatus === 'loading') return;
+    autoSelectOnLoad.current = false;
+    const next = selectDefaultTrip(trips, localDateISO());
+    setSelectedId(next?.tripId ?? null);
+    setDayIndex(next?.dayIndex ?? 0);
+  }, [syncStatus, trips]);
   useEffect(() => { if (dayIndex >= (trip?.days.length || 1)) setDayIndex(0); }, [trip?.days.length, dayIndex]);
 
-  if (!trip || !day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
+  if (!trip) return <>
+    <FinishedTripLanding trips={sortedTrips} showPastTrips={showPastTrips} onShowPastTrips={setShowPastTrips}
+      onOpenTrip={selectTrip} onCreate={() => setModal({ type: 'trip' })} loading={online && syncStatus === 'loading'} />
+    {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
+  </>;
+  if (!day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
 
   const storedOfflineManifest = offlineTripManifest(trip.id);
   const offlineComplete = isOfflineTripComplete(storedOfflineManifest, trip);
@@ -1353,7 +1410,8 @@ function App() {
 
   return (
     <main className={`app-shell mobile-sheet-${sheetStage} ${railOpen ? '' : 'rail-hidden'} ${timelineOpen ? '' : 'timeline-hidden'}`}>
-      <TripRail trips={sortedTrips} selectedId={trip.id} onSelect={setSelectedId} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
+      <TripRail trips={sortedTrips} selectedId={trip.id} onSelect={selectTrip} onAdd={() => setModal({ type: 'trip' })} onDelete={deleteTrip}
+        onHome={selectDefaultTrip(trips, localDateISO()) ? null : () => selectTrip(null)} open={railOpen} onClose={() => setRailOpen(false)} syncStatus={syncStatus} />
       {railOpen && <button className="rail-scrim" onClick={() => setRailOpen(false)} aria-label="旅行一覧を閉じる" />}
       <section className="map-stage">
         <header className="topbar">
@@ -1362,7 +1420,7 @@ function App() {
             {railOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
-          <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><BookOpen size={20} /></button>
+          <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><StickyNote size={20} /></button>
           <button className={`icon-button offline-save-button ${offlineComplete ? 'is-saved' : offlinePartial ? 'is-partial' : ''}`}
             onClick={saveCurrentTripOffline} disabled={!online || offlineSave.status === 'saving'}
             aria-label={offlineButtonLabel} title={online ? offlineButtonLabel : 'オンライン時に保存できます'}>
@@ -1380,6 +1438,7 @@ function App() {
         <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} bookmarks={bookmarks} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
           varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
+          compactViewport={sheetStage === 'half'}
           onGuide={openGuide} onAddBookmarkToPlan={addBookmarkToPlan} onEditBookmark={editBookmark} />
         <button className="map-bookmarks-button" onClick={() => setModal({ type: 'bookmarkList' })}
           aria-label={`ブックマークを開く（${bookmarks.length}件）`} title="この旅行のブックマーク">
@@ -1398,12 +1457,12 @@ function App() {
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={openGuide}
       onSelect={(activity, options = {}) => {
         setMapFocus({ activityId: activity.id, previousDay: options.previousDay, requestId: uid(), mode: 'toggle' });
-        if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
+        if (window.matchMedia('(max-width: 820px)').matches && sheetStage !== 'half') setSheetStage('peek');
       }}
       onSearchResult={({ activity, dayIndex: resultDayIndex }) => {
         setDayIndex(resultDayIndex);
         setMapFocus({ activityId: activity.id, requestId: uid(), mode: 'select' });
-        if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
+        if (window.matchMedia('(max-width: 820px)').matches && sheetStage !== 'half') setSheetStage('peek');
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'placeChoice' && <PlaceActionModal key={modal.place.id || modal.place.placeId || `${modal.place.coords?.lat},${modal.place.coords?.lng}`}

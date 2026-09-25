@@ -15,6 +15,7 @@ vi.mock('../src/useSharedWorkspace', () => ({
 }));
 
 it('lists saved candidates by category and opens their details offline', async () => {
+  vi.setSystemTime(new Date('2026-09-25T12:00:00'));
   localStorage.clear();
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn() });
@@ -33,4 +34,5 @@ it('lists saved candidates by category and opens their details offline', async (
   await act(async () => { window.__roamRoot.unmount(); });
   delete window.__roamRoot;
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+  vi.useRealTimers();
 });
