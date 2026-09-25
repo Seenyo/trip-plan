@@ -22,11 +22,11 @@ export default function PlacePhotos({ item, variant = 'card' }) {
 
   if (!available) return null;
   return <div className={`map-place-photos ${variant === 'modal' ? 'is-modal' : ''}`} aria-label={`${item.title}のGoogle マップの写真`}>
-    <strong className="map-place-photos-heading">Google マップの写真</strong>
+    <strong className="map-place-photos-heading">Google マップの写真{visibleResult.status === 'ready' ? ` ${visibleResult.photos.length}枚` : ''}</strong>
     {visibleResult.status === 'loading' && <p className="map-place-photos-status" role="status">写真を読み込み中…</p>}
     {visibleResult.status === 'empty' && <p className="map-place-photos-status">この地点の写真は見つかりませんでした。</p>}
     {visibleResult.status === 'error' && <p className="map-place-photos-status">写真を読み込めませんでした。 <button type="button" onClick={() => setRetry((value) => value + 1)}>再試行</button></p>}
-    {visibleResult.status === 'ready' && <div className="map-place-photo-list">{visibleResult.photos.map((photo) => <div className="map-place-photo" key={photo.googleMapsURI}>
+    {visibleResult.status === 'ready' && <div className="map-place-photo-list" role="region" aria-label="Google マップの写真一覧" tabIndex={visibleResult.photos.length > 2 ? 0 : undefined}>{visibleResult.photos.map((photo) => <div className="map-place-photo" key={photo.googleMapsURI}>
       <a className="map-place-photo-image" href={photo.googleMapsURI} target="_blank" rel="noopener noreferrer" aria-label={`${item.title}の写真をGoogle マップで開く`}>
         <img src={photo.url} alt={`${item.title}のGoogle マップの写真`} loading="lazy" decoding="async" />
       </a>
