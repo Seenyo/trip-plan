@@ -124,6 +124,7 @@ export default function PlaceSearch({ value, onChange, onSelect, apiKey, onReque
       setCandidates([]);
       setStatus('idle');
       onSelect({
+        placeId: place.id || candidate.id || null,
         title: place.displayName || '',
         location,
         coords: { lat: place.location.lat(), lng: place.location.lng() },

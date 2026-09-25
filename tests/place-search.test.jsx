@@ -44,7 +44,7 @@ it('offers all results and only sets coordinates after the user selects one', as
   expect(screen.getAllByRole('listitem')).toHaveLength(2);
   expect(onSelect).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Reykjanes' })));
-  expect(onSelect).toHaveBeenCalledWith({ title: 'Reykjanes', location: 'Reykjanes', coords: { lat: 64, lng: -21 } });
+  expect(onSelect).toHaveBeenCalledWith({ placeId: 'Reykjanes', title: 'Reykjanes', location: 'Reykjanes', coords: { lat: 64, lng: -21 } });
   expect(screen.queryByRole('list')).toBeNull();
 });
 it('prioritizes text search for localized names when autocomplete returns an unrelated candidate', async () => {
@@ -68,6 +68,7 @@ it('prioritizes text search for localized names when autocomplete returns an unr
   expect(screen.getAllByRole('listitem')[0].textContent).toContain('Dettifoss');
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /Dettifoss/ })));
   expect(onSelect).toHaveBeenCalledWith({
+    placeId: 'dettifoss',
     title: 'Dettifoss',
     location: '671, Iceland',
     coords: { lat: 65.8147, lng: -16.3846 },

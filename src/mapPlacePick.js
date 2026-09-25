@@ -8,6 +8,7 @@ export async function namedPlaceFromMapClick(maps, event) {
     const title = place.displayName?.trim();
     if (!title || !place.location) return null;
     return {
+      placeId: event.placeId,
       title,
       location: place.formattedAddress || title,
       coords: { lat: place.location.lat(), lng: place.location.lng() },

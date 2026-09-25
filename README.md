@@ -17,6 +17,8 @@ The map and place search use a Google Maps JavaScript API key configured when th
 
 The base map uses Google's default road-map colors and clickable place icons. Google chooses which business labels to show at each zoom level; zoom in or use place search for businesses not labeled on the map. More control over point-of-interest density would require a Google Cloud map ID and a cloud-based map style.
 
+Tap a named place on the map or select a search result to add it to the itinerary or save it as a trip-specific bookmark. Bookmarks stay separate from dated plans, use the ご飯・自然・施設・その他 categories, and appear as small colored pins. The 候補 button opens a searchable, filterable list; selecting a saved place focuses it on the map. Bookmarks are stored with the trip in the shared workspace and in its offline copy.
+
 For the deployed site, allow this HTTP referrer in the key restrictions:
 
 ```text

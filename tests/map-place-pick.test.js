@@ -18,6 +18,7 @@ it('uses the selected named place and its actual location', async () => {
   class Place { constructor({ id }) { this.id = id; this.fetchFields = fetchFields; } }
   const maps = { importLibrary: vi.fn().mockResolvedValue({ Place }) };
   expect(await namedPlaceFromMapClick(maps, { placeId: 'named-place', stop: vi.fn() })).toEqual({
+    placeId: 'named-place',
     title: 'Dettifoss', location: 'Dettifoss, Iceland', coords: { lat: 65.81, lng: -16.38 },
   });
   expect(fetchFields).toHaveBeenCalledWith({ fields: ['displayName', 'formattedAddress', 'location'] });

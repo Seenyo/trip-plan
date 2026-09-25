@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   ArrowLeft,
+  Bookmark,
   BookOpen,
   Check,
   ChevronLeft,
@@ -60,6 +61,7 @@ import { searchBonusStores, searchEvChargers, searchTripActivities } from './pla
 import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { namedPlaceFromMapClick } from './mapPlacePick';
+import { BOOKMARK_CATEGORIES, bookmarkCategory, findMatchingBookmark, removeTripBookmark, saveTripBookmark } from './bookmarks';
 import { uploadPlanImage } from './travelDocuments';
 import {
   distanceKmBetween,
@@ -78,6 +80,7 @@ import {
 const TravelReader = React.lazy(() => import('./TravelReader'));
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+const EMPTY_BOOKMARKS = [];
 
 const seedTrips = sortTripsByStartDate([icelandTrip, domesticTrip]);
 const migrateTrips = () => {
@@ -164,7 +167,7 @@ function createStopMarker(maps, map, item, number, color, onClick) {
   });
 }
 
-function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
+function MapDetailCard({ selection, travelTime, onClose, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   if (!selection) return null;
   if (selection.type === 'bonus') {
     const store = selection.item;
@@ -191,6 +194,20 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
       </div>
     </article>;
   }
+  if (selection.type === 'bookmark') {
+    const bookmark = selection.item;
+    return <article className={`map-detail-card bookmark-detail-card bookmark-${bookmark.category}`} aria-live="polite">
+      <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
+      <span className="map-detail-symbol"><Bookmark size={18} fill="currentColor" /></span>
+      <div className="map-detail-copy"><small>ブックマーク · {bookmarkCategory(bookmark.category).label}</small><h2>{bookmark.title}</h2>
+        {bookmark.location && <p>{bookmark.location}</p>}
+        <div className="bookmark-detail-actions">
+          <button onClick={() => onAddBookmarkToPlan(bookmark)}>予定に追加</button>
+          <button onClick={() => onEditBookmark(bookmark)}>カテゴリを変更</button>
+        </div>
+      </div>
+    </article>;
+  }
   const activity = selection.item;
   const firstImage = activity.images?.[0];
   return <article className={`map-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
@@ -210,14 +227,16 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
   </article>;
 }
 
-const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide }) {
+const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
+  const bookmarkMarkers = useRef([]);
   const locationMarker = useRef(null);
   const locationWatch = useRef(null);
   const selectionRef = useRef(null);
   const routeCache = useRef(null);
+  const renderedDayId = useRef(null);
   const travelTimesStopsKey = useRef(null);
   const mapPickRequest = useRef(0);
   const mapPickCallback = useRef(onMapPick);
@@ -291,7 +310,12 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
       const item = day.activities.find((activity) => activity.id === selection.activityId);
       return item ? { ...selection, item } : null;
     })()
-    : selection;
+    : selection?.type === 'bookmark'
+      ? (() => {
+        const item = bookmarks.find((bookmark) => bookmark.id === selection.bookmarkId);
+        return item ? { ...selection, item } : null;
+      })()
+      : selection;
 
   useEffect(() => {
     mapPickRequest.current += 1;
@@ -301,6 +325,10 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
     setSelection((current) => current?.type === 'activity'
       && !day.activities.some((activity) => activity.id === current.activityId) ? null : current);
   }, [day.activities]);
+  useEffect(() => {
+    setSelection((current) => current?.type === 'bookmark'
+      && !bookmarks.some((bookmark) => bookmark.id === current.bookmarkId) ? null : current);
+  }, [bookmarks]);
   useEffect(() => {
     if (!focusRequest?.requestId || handledFocusRequest.current === focusRequest.requestId) return;
     const focused = focusRequest.previousDay
@@ -321,6 +349,8 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
     locationMarker.current?.setMap(null);
     overlays.current.forEach((overlay) => overlay.setMap(null));
     overlays.current = [];
+    bookmarkMarkers.current.forEach((marker) => marker.setMap(null));
+    bookmarkMarkers.current = [];
     if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
     mapRef.current = null;
   }, []);
@@ -352,6 +382,8 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
     let cancelled = false;
+    const preserveBookmarkView = selectionRef.current?.type === 'bookmark' && renderedDayId.current === day.id;
+    renderedDayId.current = day.id;
     const mappedStops = day.activities.map((item, index) => ({ item, index })).filter(({ item }) => item.coords);
     const points = mappedStops.map(({ item }) => item.coords);
     const routeableStops = mappedStops.filter(({ item }) => item.route !== false)
@@ -490,7 +522,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
       } else if (selectedActivityId && !selectedStart) {
         const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
         if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
-      } else mapRef.current.fitBounds(bounds, 80);
+      } else if (!preserveBookmarkView) mapRef.current.fitBounds(bounds, 80);
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
@@ -600,7 +632,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
           });
-          if (!selectedActivityId && !selectedPreviousActivity && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
+          if (!selectedActivityId && !selectedPreviousActivity && !preserveBookmarkView && selectionRef.current?.type !== 'bookmark' && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
           setRouteStatus(missingLegs.length ? 'partial' : 'ready');
         } catch (error) {
           if (cancelled) return;
@@ -609,14 +641,46 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
         }
       };
       drawDrivingRoute();
-    } else if (points.length > 1) {
+    } else if (points.length > 1 && !preserveBookmarkView) {
       mapRef.current.fitBounds(bounds, 80);
-    } else {
+    } else if (!preserveBookmarkView) {
       mapRef.current.setCenter(center);
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
   }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors]);
+
+  useEffect(() => {
+    bookmarkMarkers.current.forEach((marker) => marker.setMap(null));
+    bookmarkMarkers.current = [];
+    if (mapStatus !== 'ready' || !mapRef.current || selectedActivityId || selectedPreviousActivity) return;
+    bookmarks.filter((bookmark) => Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng))
+      .forEach((bookmark) => {
+        const category = bookmarkCategory(bookmark.category);
+        bookmarkMarkers.current.push(createMapMarker(window.google.maps, mapRef.current, bookmark.coords, {
+          className: `map-bookmark-marker bookmark-${category.id}`,
+          text: category.symbol,
+          title: `${category.label}の候補：${bookmark.title}`,
+          onClick: () => setSelection((current) => current?.type === 'bookmark' && current.bookmarkId === bookmark.id
+            ? null : { type: 'bookmark', bookmarkId: bookmark.id }),
+        }));
+      });
+    return () => {
+      bookmarkMarkers.current.forEach((marker) => marker.setMap(null));
+      bookmarkMarkers.current = [];
+    };
+  }, [bookmarks, mapStatus, selectedActivityId, selectedPreviousActivity]);
+
+  useEffect(() => {
+    if (!focusRequest?.bookmarkId || !focusRequest?.requestId || !mapRef.current) return;
+    if (handledFocusRequest.current === focusRequest.requestId) return;
+    const bookmark = bookmarks.find((item) => item.id === focusRequest.bookmarkId);
+    if (!bookmark) return;
+    handledFocusRequest.current = focusRequest.requestId;
+    setSelection({ type: 'bookmark', bookmarkId: bookmark.id });
+    mapRef.current.panTo(bookmark.coords);
+    if ((mapRef.current.getZoom?.() || 0) < 15) mapRef.current.setZoom(15);
+  }, [bookmarks, focusRequest?.bookmarkId, focusRequest?.requestId, mapStatus]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -662,7 +726,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
         })}
         {accessCard()}
         <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime}
-          onClose={() => setSelection(null)} onGuide={onGuide} />
+          onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
       </div>
     );
   }
@@ -680,7 +744,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMa
       </button>
       {locationStatus === 'error' && <span className="map-location-error">現在地を取得できません</span>}
       <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime}
-        onClose={() => setSelection(null)} onGuide={onGuide} />
+        onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
     </div>
   );
 });
@@ -1133,6 +1197,49 @@ function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
   );
 }
 
+function PlaceActionModal({ place, existing, onSaveBookmark, onAddToPlan, onClose }) {
+  const [category, setCategory] = useState(existing?.category || 'other');
+  return <Modal title={place.title || '場所'} eyebrow="この旅行の候補" onClose={onClose}>
+    {place.location && <p className="bookmark-place-address">{place.location}</p>}
+    <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>
+    <fieldset className="bookmark-category-field">
+      <legend>{existing ? '保存先のカテゴリを変更' : 'ブックマークに保存'}</legend>
+      <p>予定に入れる前の候補として、この旅行に保存します。</p>
+      <div className="bookmark-category-grid">
+        {BOOKMARK_CATEGORIES.map((item) => <label key={item.id} className={`bookmark-category-option bookmark-${item.id} ${category === item.id ? 'is-selected' : ''}`}>
+          <input type="radio" name="bookmark-category" value={item.id} checked={category === item.id} onChange={() => setCategory(item.id)} />
+          <span className="bookmark-category-symbol">{item.symbol}</span>{item.label}
+        </label>)}
+      </div>
+    </fieldset>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button>
+      <button className="primary-button" onClick={() => onSaveBookmark(category)}><Bookmark size={16} /> {existing ? 'ブックマークを更新' : 'ブックマークに保存'}</button></div>
+  </Modal>;
+}
+
+function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onClose }) {
+  const [category, setCategory] = useState('all');
+  const [query, setQuery] = useState('');
+  const bookmarks = trip.bookmarks || EMPTY_BOOKMARKS;
+  const visible = bookmarks.filter((bookmark) => (category === 'all' || bookmark.category === category)
+    && `${bookmark.title} ${bookmark.location}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  return <Modal title="ブックマーク" eyebrow={trip.title} onClose={onClose}>
+    <div className="bookmark-filters" aria-label="ブックマークのカテゴリ">
+      {[{ id: 'all', label: `すべて ${bookmarks.length}` }, ...BOOKMARK_CATEGORIES].map((item) => <button key={item.id}
+        className={category === item.id ? 'is-active' : ''} onClick={() => setCategory(item.id)}>{item.label}</button>)}
+    </div>
+    <label className="bookmark-list-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="候補を検索" aria-label="ブックマークを検索" /></label>
+    {visible.length ? <ul className="bookmark-list">{visible.map((bookmark) => <li key={bookmark.id}>
+      <button className="bookmark-list-place" onClick={() => onFocus(bookmark)} aria-label={`${bookmark.title}${mapAvailable ? 'を地図で表示' : 'の詳細を表示'}`}>
+        <span className={`bookmark-category-symbol bookmark-${bookmarkCategory(bookmark.category).id}`}>{bookmarkCategory(bookmark.category).symbol}</span>
+        <span><strong>{bookmark.title}</strong><small>{bookmark.location || bookmarkCategory(bookmark.category).label}</small></span>
+        {mapAvailable ? <MapPin size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
+      </button>
+      <div className="bookmark-list-actions"><button onClick={() => onEdit(bookmark)}>カテゴリ変更</button><button onClick={() => onRemove(bookmark)}>削除</button></div>
+    </li>)}</ul> : <p className="bookmark-empty">{bookmarks.length ? '一致する候補がありません。' : '地図上の場所や検索結果から、行きたい場所を保存できます。'}</p>}
+  </Modal>;
+}
+
 function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
   const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
@@ -1153,6 +1260,7 @@ function App() {
   const [offlineSave, setOfflineSave] = useState({ tripId: null, status: 'idle', message: '' });
   const trip = trips.find((item) => item.id === selectedId) || sortedTrips[0];
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
+  const bookmarks = trip?.bookmarks || EMPTY_BOOKMARKS;
 
   const updateTrip = useCallback((updater) => {
     setTrips((current) => current.map((item) => item.id === trip.id ? updater(item) : item));
@@ -1193,7 +1301,20 @@ function App() {
     setDayIndex(dayIndex + 1);
     setModal({ type: 'day', day: newDay });
   };
-  const mapPick = useCallback((place) => setModal({ type: 'activity', dayId: day?.id, activity: { time: '10:00', title: '', notes: '', ...place } }), [day?.id]);
+  const mapPick = useCallback((place) => setModal({ type: 'placeChoice', place }), []);
+  const addBookmarkToPlan = useCallback((bookmark) => setModal({
+    type: 'activity', dayId: day?.id,
+    activity: { time: '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords, notes: '' },
+  }), [day?.id]);
+  const editBookmark = useCallback((bookmark) => setModal({ type: 'placeChoice', place: bookmark }), []);
+  const saveBookmark = (place, category) => {
+    const existing = findMatchingBookmark(bookmarks, place);
+    const newId = uid();
+    updateTrip((current) => saveTripBookmark(current, place, category, newId));
+    setMapFocus({ bookmarkId: existing?.id || newId, requestId: uid() });
+    if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
+    setModal(null);
+  };
   const openGuide = useCallback((activity) => setReader({ trip, activity }), [trip]);
   const saveCurrentTripOffline = async () => {
     if (!trip || offlineSave.status === 'saving') return;
@@ -1256,12 +1377,16 @@ function App() {
           </button>
         </header>
         {online && <SearchBar apiKey={apiKey} onResult={mapPick} />}
-        <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
+        <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} bookmarks={bookmarks} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
           varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
-          onGuide={openGuide} />
+          onGuide={openGuide} onAddBookmarkToPlan={addBookmarkToPlan} onEditBookmark={editBookmark} />
+        <button className="map-bookmarks-button" onClick={() => setModal({ type: 'bookmarkList' })}
+          aria-label={`ブックマークを開く（${bookmarks.length}件）`} title="この旅行のブックマーク">
+          <Bookmark size={17} /><span>候補</span><strong>{bookmarks.length}</strong>
+        </button>
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
-        <div className="map-hint"><MapPin size={14} /> 地図上の名前がある場所をタップして予定を追加</div>
+        <div className="map-hint"><MapPin size={14} /> 名前のある場所をタップして予定・候補に追加</div>
         {offlineSave.tripId === trip.id && offlineSave.message && <div className={`offline-save-status is-${offlineSave.status}`} role="status">
           {offlineSave.status === 'saving' && <LoaderCircle className="offline-save-spinner" size={15} />}
           {offlineSave.message}
@@ -1281,6 +1406,22 @@ function App() {
         if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
+      {modal?.type === 'placeChoice' && <PlaceActionModal key={modal.place.id || modal.place.placeId || `${modal.place.coords?.lat},${modal.place.coords?.lng}`}
+        place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} onClose={() => setModal(null)}
+        onAddToPlan={() => addBookmarkToPlan(modal.place)} onSaveBookmark={(category) => saveBookmark(modal.place, category)} />}
+      {modal?.type === 'bookmarkList' && <BookmarkListModal trip={trip} mapAvailable={online && Boolean(apiKey)} onClose={() => setModal(null)}
+        onFocus={(bookmark) => {
+          if (online && apiKey) {
+            setMapFocus({ bookmarkId: bookmark.id, requestId: uid() });
+            if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
+            setModal(null);
+          } else editBookmark(bookmark);
+        }} onEdit={editBookmark} onRemove={(bookmark) => setModal({ type: 'confirmBookmarkDelete', bookmark })} />}
+      {modal?.type === 'confirmBookmarkDelete' && <Modal title="ブックマークを削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
+        <p className="delete-confirm-copy">「{modal.bookmark.title}」をこの旅行の候補から削除しますか？</p>
+        <div className="modal-actions"><button className="secondary-button" onClick={() => setModal({ type: 'bookmarkList' })}>キャンセル</button>
+          <button className="delete-confirm-button" onClick={() => { updateTrip((current) => removeTripBookmark(current, modal.bookmark.id)); setModal({ type: 'bookmarkList' }); }}>削除する</button></div>
+      </Modal>}
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
