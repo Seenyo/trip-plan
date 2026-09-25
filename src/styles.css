@@ -39,6 +39,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .finished-trip-brand .brand-mark { background: var(--paper); }
 .finished-trip-content { width: min(580px, 100%); margin: auto; padding: 40px 0 80px; }
 .finished-trip-symbol { width: 64px; height: 64px; display: grid; place-items: center; margin-bottom: 29px; border-radius: 19px; color: white; background: var(--orange); }
+.finished-trip-symbol img { width: 48px; height: 48px; border-radius: 13px; }
 .finished-trip-content h1 { margin: 0 0 15px; font: 400 clamp(29px, 4vw, 46px)/1.28 'Archivo Black', sans-serif; letter-spacing: -.035em; }
 .finished-trip-content > p { max-width: 450px; margin: 0 0 31px; color: rgba(245,245,245,.7); font-size: 14px; line-height: 1.7; }
 .finished-trip-actions { width: min(335px, 100%); display: grid; gap: 11px; }
@@ -68,7 +69,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .rail-hidden .trip-rail { padding-left: 0; padding-right: 0; opacity: 0; pointer-events: none; }
 .trip-rail::before, .trip-rail::after { display: none; }
 .rail-brand { display: flex; align-items: center; gap: 10px; font-family: 'Archivo Black', sans-serif; letter-spacing: .09em; font-size: 14px; }
-.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(245,245,245,.92); color: var(--orange); }
+.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: rgba(245,245,245,.92); color: var(--orange); }
+.brand-mark img { width: 100%; height: 100%; display: block; }
 .rail-heading { margin: 48px 2px 14px; display: flex; justify-content: space-between; align-items: center; color: rgba(245,245,245,.7); font: 700 9px 'Space Mono', monospace; text-transform: uppercase; letter-spacing: .09em; }
 .rail-heading button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--paper); background: rgba(118,171,174,.28); cursor: pointer; }
 .trip-list { display: grid; gap: 7px; overflow-y: auto; }
@@ -393,13 +395,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .map-bookmark-marker { position: absolute; z-index: 1; transform: translate(-50%, -50%); width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 2px solid white; border-radius: 50%; color: white; box-shadow: 0 3px 10px rgba(48,56,65,.23); font-size: 11px; font-weight: 800; cursor: pointer; }
 .map-bookmark-marker::before { content: ''; position: absolute; inset: -9px; }
 .map-bookmark-marker:hover, .map-bookmark-marker:focus-visible { transform: translate(-50%, -50%) scale(1.12); }
-.bookmark-food { --bookmark-color: #dc7350; }
-.bookmark-nature { --bookmark-color: #599b68; }
-.bookmark-facility { --bookmark-color: #7979b7; }
-.bookmark-supermarket { --bookmark-color: #4e9f9a; }
-.bookmark-heritage { --bookmark-color: #a98054; }
-.bookmark-other { --bookmark-color: #688b9f; }
-.map-bookmark-marker.bookmark-food, .map-bookmark-marker.bookmark-nature, .map-bookmark-marker.bookmark-facility, .map-bookmark-marker.bookmark-supermarket, .map-bookmark-marker.bookmark-heritage, .map-bookmark-marker.bookmark-other { background: var(--bookmark-color); }
 .map-current-location { position: absolute; z-index: 4; transform: translate(-50%, -50%); width: 22px; height: 22px; padding: 0; border: 3px solid white; border-radius: 50%; background: #3f86f5; box-shadow: 0 0 0 8px rgba(63,134,245,.19), 0 3px 10px rgba(48,56,65,.25); cursor: pointer; }
 .map-location-button { position: absolute; z-index: 7; right: 18px; bottom: 116px; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 12px; color: var(--slate); background: rgba(252,252,250,.97); box-shadow: 0 8px 22px rgba(48,56,65,.16); cursor: pointer; }
 .map-location-button.is-active { color: #3f86f5; }
@@ -456,9 +451,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-category-option.is-selected { border-color: var(--bookmark-color); background: color-mix(in srgb, var(--bookmark-color) 9%, white); }
 .bookmark-category-option:focus-within { outline: 3px solid var(--bookmark-color); outline-offset: 2px; }
 .bookmark-category-symbol { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--bookmark-color); font-size: 11px; font-weight: 800; }
+.bookmark-add-category { min-height: 38px; display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; padding: 0 2px; border: 0; color: var(--slate); background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
+.bookmark-add-category:hover { color: var(--orange); }
 .bookmark-filters { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 9px; scrollbar-width: none; }
 .bookmark-filters button { flex: 0 0 auto; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 20px; color: var(--muted); background: white; font-size: 10px; font-weight: 700; cursor: pointer; }
 .bookmark-filters button.is-active { color: white; border-color: var(--slate); background: var(--slate); }
+.bookmark-filter-add { display: inline-flex; align-items: center; gap: 5px; color: var(--slate) !important; border-style: dashed !important; }
 .bookmark-list-search { min-height: 38px; display: flex; align-items: center; gap: 7px; margin-bottom: 9px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--sage); }
 .bookmark-list-search input { min-width: 0; flex: 1; border: 0; outline: 0; font-size: 11px; }
 .bookmark-list { max-height: 48dvh; display: grid; gap: 7px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
@@ -472,6 +470,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-list-actions button { min-height: 40px; padding: 0 6px; border: 0; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer; }
 .bookmark-list-actions button:last-child { color: #b43f34; }
 .bookmark-empty { margin: 18px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.bookmark-category-form { gap: 18px 12px; }
+.bookmark-color-field { margin: 0; padding: 0; border: 0; }
+.bookmark-color-field legend { margin: 0 0 8px 2px; padding: 0; font-size: 9px; font-weight: 700; }
+.bookmark-color-options { display: flex; flex-wrap: wrap; gap: 2px; }
+.bookmark-color-options label { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.bookmark-color-options label.is-selected { border-color: var(--ink); }
+.bookmark-color-options label:focus-within { outline: 3px solid rgba(255,87,34,.24); outline-offset: 2px; }
+.bookmark-color-options span { width: 28px; height: 28px; border-radius: 50%; background: var(--bookmark-color); }
+.bookmark-color-options input { position: absolute; opacity: 0; pointer-events: none; }
 .map-travel-time { margin: 2px 0 7px; }
 
 @media (max-width: 820px) {

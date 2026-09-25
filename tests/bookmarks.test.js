@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOOKMARK_CATEGORIES, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
+import { BOOKMARK_CATEGORIES, addBookmarkCategory, bookmarkCategoriesForTrip, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
 
 const place = { placeId: 'google-place-1', title: '  Café  ', location: 'Main Street', coords: { lat: 64.1, lng: -21.9 } };
 
@@ -33,5 +33,15 @@ describe('trip bookmarks', () => {
       images: [{ path: 'trip/photo' }], time: '11:00', travelMode: 'WALKING', route: false });
     expect(trip.days[0].activities).toHaveLength(2);
     expect(moveActivityToBookmark(trip, 'day-1', { ...activity, coords: null }, 'heritage', 'bookmark-2').bookmarks[0].coords).toBeNull();
+  });
+
+  it('adds a trip-only category and uses it when saving a candidate', () => {
+    const trip = { bookmarks: [] };
+    const withCategory = addBookmarkCategory(trip, '温泉', '#4e9f9a', 'custom-spa');
+    expect(bookmarkCategoriesForTrip(withCategory).find((item) => item.id === 'custom-spa')).toMatchObject({ label: '温泉', symbol: '温', color: '#4e9f9a' });
+    const saved = saveTripBookmark(withCategory, { title: '青い温泉', coords: { lat: 64, lng: -21 } }, 'custom-spa', 'bookmark-spa');
+    expect(saved.bookmarks[0].category).toBe('custom-spa');
+    expect(() => addBookmarkCategory(withCategory, '温泉', '#4e9f9a', 'custom-again')).toThrow('同じ名前');
+    expect(() => addBookmarkCategory(withCategory, 'x'.repeat(17), '#4e9f9a', 'custom-long')).toThrow('1〜16');
   });
 });
