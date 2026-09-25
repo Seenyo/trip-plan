@@ -215,7 +215,7 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide, onAddBookmarkT
   return <article className={`map-detail-card activity-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
     <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
     <button className="map-detail-guide" onClick={() => onGuide(activity)} aria-label={`${activity.title}の地点ガイドを開く`} title="地点ガイド"><BookOpen size={17} /></button>
-    {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager />}
+    {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager expandable />}
     <div className="map-detail-copy"><small>{activity.time || '時間未定'}</small><h2>{activity.title}</h2>
       {travelTime && <div className={`travel-time map-travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}>
         <strong>{travelTime.unavailable
@@ -836,7 +836,7 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         <div className="stop-heading">
           {count > 1 && <button ref={setActivatorNodeRef} className="drag-handle" type="button"
             aria-label={`${item.title}を並べ替える`} title="ドラッグして並べ替え"
-            onTouchStart={(event) => event.stopPropagation()} {...attributes} {...listeners}>
+            {...attributes} {...listeners}>
             <GripVertical size={16} />
           </button>}
           <h3>{item.title}</h3>
@@ -848,8 +848,7 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
         <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
         {item.notes && <small>{item.notes}</small>}
         {item.images?.length > 0 && <div className="stop-images" aria-label={`${item.title}の写真`}>
-          {item.images.slice(0, 3).map((image, imageIndex) => <PlanImage key={image.id || image.path || imageIndex} image={image} />)}
-          {item.images.length > 3 && <span>+{item.images.length - 3}</span>}
+          {item.images.map((image, imageIndex) => <PlanImage key={image.id || image.path || imageIndex} image={image} expandable />)}
         </div>}
         <button className="guide-entry" onClick={() => onGuide(item)}><BookOpen size={14} />地点ガイド</button>
       </div>
@@ -899,6 +898,7 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
   };
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter}
+      autoScroll={{ canScroll: (element) => element.classList.contains('itinerary-sheet') }}
       onDragStart={({ active }) => setActiveId(active.id)} onDragCancel={() => setActiveId(null)} onDragEnd={finishDrag}>
       <div className="timeline">
         {previousActivity && <PreviousDayStop item={previousActivity} varyRouteColors={varyRouteColors}
@@ -916,19 +916,20 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
         </SortableContext>}
         {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
       </div>
-      <DragOverlay dropAnimation={reducedMotion ? null : { duration: 230, easing: 'cubic-bezier(.2,.9,.3,1)' }}>
+      {createPortal(<DragOverlay dropAnimation={reducedMotion ? null : { duration: 230, easing: 'cubic-bezier(.2,.9,.3,1)' }}>
         {activeItem && <div className="drag-preview">
           <GripVertical size={17} />
           <span>{activeItem.time || '時間未定'}</span>
           <strong>{activeItem.title}</strong>
         </div>}
-      </DragOverlay>
+      </DragOverlay>, document.body)}
     </DndContext>
   );
 }
 
 function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
   const touch = useRef(null);
+  const suppressClickUntil = useRef(0);
   const sheet = useRef(null);
   const handle = useRef(null);
   const mobileDays = useRef(null);
@@ -953,29 +954,46 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
     if (sheet.current) sheet.current.scrollTop = 0;
   }, [stage]);
   const onTouchStart = (event) => {
+    touch.current = null;
+    suppressClickUntil.current = 0;
+    // Portal content, multi-touch, form controls and drag handles never move the sheet.
+    if (!event.currentTarget.contains(event.target) || event.touches.length > 1) return;
     const t = event.changedTouches[0];
     const stageControl = event.target.closest?.('.sheet-handle-wrap, .mobile-day-strip');
-    touch.current = { x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1, stageControl: Boolean(stageControl) };
+    if (!stageControl && event.target.closest?.('button, a, input, textarea, select, .stop-images')) return;
+    touch.current = { id: t.identifier, x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1, stageControl: Boolean(stageControl) };
   };
   const onTouchEnd = (event) => {
-    if (!touch.current) return;
-    const t = event.changedTouches[0];
-    const dx = t.clientX - touch.current.x;
-    const dy = t.clientY - touch.current.y;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
+    const start = touch.current;
+    touch.current = null;
+    if (!start) return;
+    const t = Array.from(event.changedTouches).find((point) => point.identifier === start.id);
+    if (!t || event.touches.length > 0) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // A completed swipe must not also activate a date, plan or handle via a synthesized click.
+    suppressClickUntil.current = Math.max(Math.abs(dx), Math.abs(dy)) > 12 ? Date.now() + 700 : 0;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45 && !start.stageControl) {
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
     } else if (Math.abs(dy) > Math.abs(dx)) {
       if (dy < -35 && stage === 'peek') setStage('half');
-      else if (dy < -35 && stage === 'half' && touch.current.stageControl) setStage('full');
-      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'full') setStage('half');
-      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'half' && touch.current.stageControl) setStage('peek');
+      else if (dy < -35 && stage === 'half' && start.stageControl) setStage('full');
+      else if (dy > 45 && start.atTop && event.currentTarget.scrollTop <= 1 && stage === 'full') setStage('half');
+      else if (dy > 45 && start.atTop && event.currentTarget.scrollTop <= 1 && stage === 'half' && start.stageControl) setStage('peek');
     }
-    touch.current = null;
   };
   const handleLabel = stage === 'peek' ? '旅程を半分開く' : '旅程を閉じる';
   return (
     <section ref={sheet} className={`itinerary-sheet sheet-${stage}`} data-sheet-stage={stage}
-      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }} aria-label="この日の旅程">
+      onClickCapture={(event) => {
+        if (Date.now() < suppressClickUntil.current && event.detail !== 0) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        suppressClickUntil.current = 0;
+      }}
+      onTouchStart={onTouchStart} onTouchMove={(event) => { if (event.touches.length > 1) touch.current = null; }}
+      onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }} aria-label="この日の旅程">
       <button ref={handle} className="sheet-handle-wrap" onClick={() => setStage(stage === 'peek' ? 'half' : 'peek')}
         aria-label={handleLabel} aria-expanded={stage !== 'peek'}><span className="sheet-handle" /></button>
       <div ref={mobileDays} className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
@@ -1032,11 +1050,11 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
     const previousFocus = document.activeElement;
     if (background) background.inert = true;
     const firstFocus = dialogRef.current?.querySelector(danger ? '.secondary-button' : '.modal-heading button');
-    firstFocus?.focus();
+    firstFocus?.focus({ preventScroll: true });
     return () => {
       if (background) background.inert = previouslyInert;
-      if (previousFocus?.isConnected) previousFocus.focus();
-      else document.querySelector('.rail-toggle')?.focus();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+      else document.querySelector('.rail-toggle')?.focus({ preventScroll: true });
     };
   }, [danger]);
   const containFocus = (event) => {
@@ -1110,7 +1128,7 @@ function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId })
       <form className="form-grid" onSubmit={submit}>
         <label className="field date-field"><span>日付</span><input type="date" required value={form.date} onChange={(e) => set('date', e.target.value)} /></label>
         <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
-        <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
+        <label className="field title-field"><span>予定</span><input required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
         <div className="field full"><span>場所</span>
           <PlaceSearch value={form.location} apiKey={apiKey}
             onChange={(location) => setForm((current) => ({ ...current, location, coords: null }))}
@@ -1161,7 +1179,7 @@ function TripForm({ onSave, onClose }) {
   return (
     <Modal title="新しい旅行を作成" eyebrow="新規旅行" onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); if (form.title && form.startDate) onSave(form); }}>
-        <label className="field full"><span>旅行名</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="例：京都で過ごす週末" /></label>
+        <label className="field full"><span>旅行名</span><input required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="例：京都で過ごす週末" /></label>
         <label className="field full"><span>旅行の説明</span><input value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)} placeholder="例：お寺、朝の散歩、とっておきの食事" /></label>
         <label className="field"><span>開始日</span><input required type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></label>
         <label className="field"><span>終了日</span><input required type="date" min={form.startDate} value={form.endDate} onChange={(e) => set('endDate', e.target.value)} /></label>
@@ -1176,7 +1194,7 @@ function DayForm({ day, onSave, onAddDay, onClose }) {
   return (
     <Modal title="この日の予定を編集" eyebrow={formatDay(day.date)} onClose={onClose}>
       <form className="form-grid" onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
-        <label className="field full"><span>この日のタイトル</span><input autoFocus required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+        <label className="field full"><span>この日のタイトル</span><input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
         <label className="field full"><span>日付</span><input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
         <label className="field full"><span>この日のメモ</span><textarea rows="3" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="過ごし方、注意事項、大切にしたいことなど" /></label>
         <button type="button" className="text-button full" onClick={onAddDay}><Plus size={16} /> この日の後に1日追加</button>
