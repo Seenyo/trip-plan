@@ -876,7 +876,8 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
   }, [stage]);
   const onTouchStart = (event) => {
     const t = event.changedTouches[0];
-    touch.current = { x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1 };
+    const stageControl = event.target.closest?.('.sheet-handle-wrap, .mobile-day-strip');
+    touch.current = { x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1, stageControl: Boolean(stageControl) };
   };
   const onTouchEnd = (event) => {
     if (!touch.current) return;
@@ -887,16 +888,16 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
     } else if (Math.abs(dy) > Math.abs(dx)) {
       if (dy < -35 && stage === 'peek') setStage('half');
-      else if (dy < -35 && stage === 'half') setStage('full');
+      else if (dy < -35 && stage === 'half' && touch.current.stageControl) setStage('full');
       else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'full') setStage('half');
-      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'half') setStage('peek');
+      else if (dy > 45 && touch.current.atTop && event.currentTarget.scrollTop <= 1 && stage === 'half' && touch.current.stageControl) setStage('peek');
     }
     touch.current = null;
   };
   const handleLabel = stage === 'peek' ? '旅程を半分開く' : '旅程を閉じる';
   return (
     <section ref={sheet} className={`itinerary-sheet sheet-${stage}`} data-sheet-stage={stage}
-      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label="この日の旅程">
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }} aria-label="この日の旅程">
       <button ref={handle} className="sheet-handle-wrap" onClick={() => setStage(stage === 'peek' ? 'half' : 'peek')}
         aria-label={handleLabel} aria-expanded={stage !== 'peek'}><span className="sheet-handle" /></button>
       <div ref={mobileDays} className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>

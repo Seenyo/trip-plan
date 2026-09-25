@@ -23,8 +23,19 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   expect(sheet.dataset.sheetStage).toBe('half');
   expect(app.classList.contains('mobile-sheet-half')).toBe(true);
 
-  fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
-  fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  const timeline = sheet.querySelector('.timeline');
+  fireEvent.touchStart(timeline, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  fireEvent.touchEnd(timeline, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  expect(sheet.dataset.sheetStage).toBe('half');
+
+  sheet.scrollTop = 0;
+  fireEvent.touchStart(timeline, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  fireEvent.touchEnd(timeline, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  expect(sheet.dataset.sheetStage).toBe('half');
+
+  const mobileDays = sheet.querySelector('.mobile-day-strip');
+  fireEvent.touchStart(mobileDays, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  fireEvent.touchEnd(mobileDays, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   expect(sheet.dataset.sheetStage).toBe('full');
   expect(app.classList.contains('mobile-sheet-full')).toBe(true);
 
@@ -38,8 +49,18 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
   expect(sheet.dataset.sheetStage).toBe('half');
 
+  const handle = sheet.querySelector('.sheet-handle-wrap');
+  fireEvent.touchStart(handle, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  fireEvent.touchEnd(handle, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  expect(sheet.dataset.sheetStage).toBe('full');
+
+  sheet.scrollTop = 0;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });
+  expect(sheet.dataset.sheetStage).toBe('half');
+
+  fireEvent.touchStart(handle, { changedTouches: [{ clientX: 200, clientY: 360 }] });
+  fireEvent.touchEnd(handle, { changedTouches: [{ clientX: 200, clientY: 600 }] });
   expect(sheet.dataset.sheetStage).toBe('peek');
 
   fireEvent.click(sheet.querySelector('.sheet-handle-wrap'));
