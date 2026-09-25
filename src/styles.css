@@ -445,6 +445,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-place-address { margin: -7px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .bookmark-place-notes { margin: 0 0 14px; color: var(--ink); font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
 .bookmark-place-image { width: 96px; height: 96px; margin: 0 0 14px; }
+.bookmark-pending-photos { margin: 0 0 14px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .bookmark-plan-action { width: 100%; min-height: 45px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 11px; color: var(--slate); background: white; font-size: 12px; font-weight: 700; cursor: pointer; }
 .bookmark-category-field { margin: 20px 0 0; padding: 0; border: 0; }
 .bookmark-category-field legend { font-size: 12px; font-weight: 700; }

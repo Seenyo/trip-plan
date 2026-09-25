@@ -69,6 +69,14 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   expect(mobileDays.querySelector('[aria-selected="true"]').textContent).toBe(selectedDate);
   expect(mobileDays.querySelector('.day-strip').scrollLeft).toBe(170);
 
+  // A swipe on one date must not swallow a deliberate tap on another date.
+  const [firstDate, nextDate] = mobileDays.querySelectorAll('[role="tab"]');
+  fireEvent.touchStart(firstDate, { changedTouches: [{ clientX: 250, clientY: 60 }] });
+  fireEvent.touchEnd(firstDate, { changedTouches: [{ clientX: 80, clientY: 60 }] });
+  fireEvent.click(nextDate, { detail: 1 });
+  expect(nextDate.getAttribute('aria-selected')).toBe('true');
+  fireEvent.click(firstDate, { detail: 0 });
+
   sheet.scrollTop = 0;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
   fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 200, clientY: 600 }] });

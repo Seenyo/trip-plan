@@ -960,13 +960,14 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
   }, [stage]);
   const onTouchStart = (event) => {
     touch.current = null;
-    suppressClickUntil.current = 0;
+    suppressClickUntil.current = null;
     // Portal content, multi-touch, form controls and drag handles never move the sheet.
     if (!event.currentTarget.contains(event.target) || event.touches.length > 1) return;
     const t = event.changedTouches[0];
     const stageControl = event.target.closest?.('.sheet-handle-wrap, .mobile-day-strip');
     if (!stageControl && event.target.closest?.('button, a, input, textarea, select, .stop-images')) return;
-    touch.current = { id: t.identifier, x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1, stageControl: Boolean(stageControl) };
+    touch.current = { id: t.identifier, x: t.clientX, y: t.clientY, atTop: event.currentTarget.scrollTop <= 1,
+      stageControl: Boolean(stageControl), clickTarget: event.target.closest?.('button, a, .stop-copy') };
   };
   const onTouchEnd = (event) => {
     const start = touch.current;
@@ -977,7 +978,8 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
     // A completed swipe must not also activate a date, plan or handle via a synthesized click.
-    suppressClickUntil.current = Math.max(Math.abs(dx), Math.abs(dy)) > 12 ? Date.now() + 700 : 0;
+    suppressClickUntil.current = Math.max(Math.abs(dx), Math.abs(dy)) > 12 && start.clickTarget
+      ? { until: Date.now() + 400, target: start.clickTarget } : null;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45 && !start.stageControl) {
       setDayIndex(Math.max(0, Math.min(trip.days.length - 1, dayIndex + (dx < 0 ? 1 : -1))));
     } else if (Math.abs(dy) > Math.abs(dx)) {
@@ -991,11 +993,14 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
   return (
     <section ref={sheet} className={`itinerary-sheet sheet-${stage}`} data-sheet-stage={stage}
       onClickCapture={(event) => {
-        if (Date.now() < suppressClickUntil.current && event.detail !== 0) {
+        const suppression = suppressClickUntil.current;
+        if (suppression && Date.now() < suppression.until && event.detail !== 0
+          && (event.target === suppression.target || suppression.target.contains(event.target))) {
           event.preventDefault();
           event.stopPropagation();
+          suppressClickUntil.current = null;
         }
-        suppressClickUntil.current = 0;
+        if (suppression && Date.now() >= suppression.until) suppressClickUntil.current = null;
       }}
       onTouchStart={onTouchStart} onTouchMove={(event) => { if (event.touches.length > 1) touch.current = null; }}
       onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }} aria-label="この日の旅程">
@@ -1140,18 +1145,10 @@ function ActivityForm({ initial, currentDate, onSave, onMoveToBookmark, onClose,
       setBusy(false);
     }
   };
-  const moveToBookmark = async () => {
+  const moveToBookmark = () => {
     if (!initial?.id || !form.title.trim() || busy) return;
-    setBusy(true);
-    setImageError('');
-    try {
-      const uploaded = await Promise.all(pendingImages.map(({ file }) => uploadPlanImage(tripId, file)));
-      const { date, ...activity } = form;
-      onMoveToBookmark({ ...activity, images: [...activity.images, ...uploaded] });
-    } catch (error) {
-      setImageError(error.message || '写真をアップロードできませんでした。');
-      setBusy(false);
-    }
+    const { date, ...activity } = form;
+    onMoveToBookmark(activity, pendingImages.map(({ file }) => file));
   };
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={() => { if (!busy) onClose(); }}>
@@ -1254,12 +1251,26 @@ function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
   );
 }
 
-function PlaceActionModal({ place, existing, movingFromPlan, onSaveBookmark, onAddToPlan, onClose }) {
+function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount = 0, onSaveBookmark, onAddToPlan, onClose }) {
   const [category, setCategory] = useState(existing?.category || 'other');
-  return <Modal title={movingFromPlan ? '予定をブックマークに移す' : place.title || '場所'} eyebrow="この旅行の候補" onClose={onClose}>
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onSaveBookmark(category);
+    } catch (cause) {
+      setError(cause.message || 'ブックマークを保存できませんでした。');
+      setBusy(false);
+    }
+  };
+  return <Modal title={movingFromPlan ? '予定をブックマークに移す' : place.title || '場所'} eyebrow="この旅行の候補" onClose={() => { if (!busy) onClose(); }}>
     {place.location && <p className="bookmark-place-address">{place.location}</p>}
     {place.notes && <p className="bookmark-place-notes">{place.notes}</p>}
     {place.images?.[0] && <PlanImage image={place.images[0]} className="bookmark-place-image" expandable />}
+    {pendingPhotoCount > 0 && <p className="bookmark-pending-photos">追加した写真 {pendingPhotoCount}枚は、候補への移動を確定してからアップロードします。</p>}
     {!movingFromPlan && <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>}
     <fieldset className="bookmark-category-field">
       <legend>{existing ? '保存先のカテゴリを変更' : 'ブックマークに保存'}</legend>
@@ -1271,8 +1282,9 @@ function PlaceActionModal({ place, existing, movingFromPlan, onSaveBookmark, onA
         </label>)}
       </div>
     </fieldset>
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button>
-      <button className="primary-button" onClick={() => onSaveBookmark(category)}><Bookmark size={16} /> {movingFromPlan ? '候補に移す' : existing ? 'ブックマークを更新' : 'ブックマークに保存'}</button></div>
+    {error && <p className="plan-photo-error" role="alert">{error}</p>}
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>キャンセル</button>
+      <button className="primary-button" onClick={save} disabled={busy}><Bookmark size={16} /> {busy ? '保存中…' : movingFromPlan ? '候補に移す' : existing ? 'ブックマークを更新' : 'ブックマークに保存'}</button></div>
   </Modal>;
 }
 
@@ -1427,11 +1439,13 @@ function App() {
     if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
     setModal(null);
   };
-  const movePlanToBookmark = (place, category, source) => {
-    const existing = findMatchingBookmark(bookmarks, place);
+  const movePlanToBookmark = async (place, category, source) => {
+    const uploaded = await Promise.all((source.pendingFiles || []).map((file) => uploadPlanImage(trip.id, file)));
+    const savedPlace = { ...place, images: [...(place.images || []), ...uploaded] };
+    const existing = findMatchingBookmark(bookmarks, savedPlace);
     const newId = uid();
-    updateTrip((current) => moveActivityToBookmark(current, source.dayId, place, category, newId));
-    const coords = place.coords || existing?.coords;
+    updateTrip((current) => moveActivityToBookmark(current, source.dayId, savedPlace, category, newId));
+    const coords = savedPlace.coords || existing?.coords;
     setMapFocus(Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng)
       ? { bookmarkId: existing?.id || newId, requestId: uid() } : null);
     if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
@@ -1545,7 +1559,7 @@ function App() {
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'placeChoice' && <PlaceActionModal key={modal.place.id || modal.place.placeId || `${modal.place.coords?.lat},${modal.place.coords?.lng}`}
-        place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} movingFromPlan={Boolean(modal.source)} onClose={() => setModal(null)}
+        place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} movingFromPlan={Boolean(modal.source)} pendingPhotoCount={modal.source?.pendingFiles?.length || 0} onClose={() => setModal(null)}
         onAddToPlan={() => addBookmarkToPlan(modal.place)} onSaveBookmark={(category) => modal.source
           ? movePlanToBookmark(modal.place, category, modal.source) : saveBookmark(modal.place, category)} />}
       {modal?.type === 'bookmarkList' && <BookmarkListModal trip={trip} mapAvailable={online && Boolean(apiKey)} onClose={() => setModal(null)}
@@ -1562,7 +1576,7 @@ function App() {
           <button className="delete-confirm-button" onClick={() => { updateTrip((current) => removeTripBookmark(current, modal.bookmark.id)); setModal({ type: 'bookmarkList' }); }}>削除する</button></div>
       </Modal>}
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity}
-        onMoveToBookmark={(activity) => setModal({ type: 'placeChoice', place: activity, source: { dayId: modal.dayId } })}
+        onMoveToBookmark={(activity, pendingFiles) => setModal({ type: 'placeChoice', place: activity, source: { dayId: modal.dayId, pendingFiles } })}
         onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
