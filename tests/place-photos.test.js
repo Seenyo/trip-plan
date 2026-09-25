@@ -8,17 +8,18 @@ const photo = (name, uri = `https://maps.google.com/photo/${name}`) => ({
 });
 
 describe('Google place photos', () => {
-  it('loads only two attributable photos from a saved place ID', async () => {
-    const photos = [photo('one'), photo('two'), photo('three')];
+  it('loads up to six attributable photos from a saved place ID', async () => {
+    const photos = Array.from({ length: 7 }, (_, index) => photo(`photo-${index + 1}`));
     const fetchFields = vi.fn(async function fetch() { this.photos = photos; });
     class Place { constructor({ id }) { this.id = id; this.fetchFields = fetchFields; } }
     const maps = { importLibrary: vi.fn(async () => ({ Place })) };
     const result = await loadPlacePhotos(maps, { title: '滝', placeId: 'google-id' });
     expect(fetchFields).toHaveBeenCalledWith({ fields: ['photos'] });
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(6);
     expect(result[0]).toMatchObject({ googleMapsURI: photos[0].googleMapsURI, authors: [{ name: '撮影者' }] });
     expect(photos[0].getURI).toHaveBeenCalledWith({ maxWidth: 480 });
-    expect(photos[2].getURI).not.toHaveBeenCalled();
+    expect(photos[5].getURI).toHaveBeenCalledWith({ maxWidth: 480 });
+    expect(photos[6].getURI).not.toHaveBeenCalled();
   });
 
   it('searches legacy stops by name and coordinates, rejecting distant matches', async () => {
