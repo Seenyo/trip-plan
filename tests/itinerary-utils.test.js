@@ -8,6 +8,7 @@ import {
   ROUTE_POINT_COLORS,
   routeColorForIndex,
   routeTextColor,
+  saveActivityOnDate,
   sortActivitiesByTime,
   sortTripsByStartDate,
   travelModeForActivity,
@@ -22,6 +23,27 @@ describe('itinerary helpers', () => {
       { id: 'museum', time: '09:30' },
     ];
     expect(sortActivitiesByTime(activities).map((item) => item.id)).toEqual(['museum', 'lunch', 'unscheduled']);
+  });
+
+  it('moves an edited plan to an existing day and sorts that day by time', () => {
+    const trip = { startDate: '2026-10-06', endDate: '2026-10-07', days: [
+      { id: 'first', date: '2026-10-06', activities: [{ id: 'a', time: '10:00' }] },
+      { id: 'second', date: '2026-10-07', activities: [{ id: 'b', time: '11:00' }] },
+    ] };
+    const moved = saveActivityOnDate(trip, 'first', { id: 'a', time: '09:00' }, '2026-10-07', 'unused');
+    expect(moved.days.map((day) => day.activities.map((item) => item.id))).toEqual([[], ['a', 'b']]);
+    expect(trip.days[0].activities).toHaveLength(1);
+  });
+
+  it('creates an unplanned date and expands the trip date range', () => {
+    const trip = { startDate: '2026-10-06', endDate: '2026-10-07', days: [
+      { id: 'first', date: '2026-10-06', activities: [{ id: 'a', time: '10:00' }] },
+      { id: 'second', date: '2026-10-07', activities: [] },
+    ] };
+    const moved = saveActivityOnDate(trip, 'first', { id: 'a', time: '09:00' }, '2026-10-08', 'third');
+    expect(moved.days.map((day) => day.date)).toEqual(['2026-10-06', '2026-10-07', '2026-10-08']);
+    expect(moved.days[2]).toMatchObject({ id: 'third', activities: [{ id: 'a', time: '09:00' }] });
+    expect(moved.endDate).toBe('2026-10-08');
   });
 
   it('shows trips in start-date order and leaves undated trips last', () => {

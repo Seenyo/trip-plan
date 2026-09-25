@@ -59,6 +59,7 @@ import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
 import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
+import { namedPlaceFromMapClick } from './mapPlacePick';
 import { uploadPlanImage } from './travelDocuments';
 import {
   distanceKmBetween,
@@ -67,6 +68,7 @@ import {
   previousDayRouteOrigin,
   reorderActivitiesIntoTimeSlots,
   routeColorForIndex,
+  saveActivityOnDate,
   sortActivitiesByTime,
   sortTripsByStartDate,
   travelModeForActivity,
@@ -208,7 +210,7 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide }) {
   </article>;
 }
 
-function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide, viewportMode }) {
+const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, onGuide }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -216,6 +218,9 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   const locationWatch = useRef(null);
   const selectionRef = useRef(null);
   const routeCache = useRef(null);
+  const travelTimesStopsKey = useRef(null);
+  const mapPickRequest = useRef(0);
+  const mapPickCallback = useRef(onMapPick);
   const bonusCache = useRef(new Map());
   const chargerCache = useRef(new Map());
   const handledFocusRequest = useRef(null);
@@ -225,6 +230,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   const [currentLocation, setCurrentLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState('idle');
   selectionRef.current = selection;
+  mapPickCallback.current = onMapPick;
 
   useEffect(() => {
     if (!apiKey || window.google?.maps) return;
@@ -257,6 +263,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       if (mapRef.current && window.google?.maps) window.google.maps.event?.clearInstanceListeners?.(mapRef.current);
       mapRef.current = null;
       routeCache.current = null;
+      travelTimesStopsKey.current = null;
       setRouteStatus('idle');
       setMapStatus('missing');
     } else if (window.google?.maps) setMapStatus('ready');
@@ -265,11 +272,15 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
 
   useEffect(() => {
     if (!mapNode.current || !window.ResizeObserver) return undefined;
+    let resizeTimer;
     const observer = new ResizeObserver(() => {
-      if (mapRef.current && window.google?.maps) window.google.maps.event.trigger(mapRef.current, 'resize');
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (mapRef.current && window.google?.maps) window.google.maps.event.trigger(mapRef.current, 'resize');
+      }, 120);
     });
     observer.observe(mapNode.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); clearTimeout(resizeTimer); };
   }, [mapStatus]);
 
   const selectedActivityId = selection?.type === 'activity' ? selection.activityId : null;
@@ -282,7 +293,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
     })()
     : selection;
 
-  useEffect(() => setSelection(null), [day.id]);
+  useEffect(() => {
+    mapPickRequest.current += 1;
+    setSelection(null);
+  }, [day.id]);
   useEffect(() => {
     setSelection((current) => current?.type === 'activity'
       && !day.activities.some((activity) => activity.id === current.activityId) ? null : current);
@@ -302,6 +316,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
   }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.mode, focusRequest?.previousDay, focusRequest?.requestId, previousActivity]);
 
   useEffect(() => () => {
+    mapPickRequest.current += 1;
     if (locationWatch.current !== null) navigator.geolocation?.clearWatch(locationWatch.current);
     locationMarker.current?.setMap(null);
     overlays.current.forEach((overlay) => overlay.setMap(null));
@@ -366,6 +381,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       : null;
     const routePoints = routeStops.map((stop) => stop.coords);
     const routeKey = JSON.stringify(routeStops.map((stop) => [stop.coords.lat, stop.coords.lng, stop.travelMode]));
+    const stopIdsKey = JSON.stringify(routeStops.map((stop) => stop.id));
     const center = points[0] || { lat: 35.6812, lng: 139.7671 };
     if (!mapRef.current) {
       mapRef.current = new window.google.maps.Map(mapNode.current, {
@@ -375,25 +391,21 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         zoomControl: false,
         gestureHandling: 'greedy',
         styles: [
-          { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
           { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
           { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#76ABAE' }] },
           { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#F5F5F5' }] },
         ],
       });
       mapRef.current.addListener('click', async (event) => {
+        const requestId = ++mapPickRequest.current;
+        event.stop?.();
         if (selectionRef.current?.type === 'activity') {
           setSelection(null);
           return;
         }
         setSelection(null);
-        const coords = { lat: event.latLng.lat(), lng: event.latLng.lng() };
-        let location = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
-        try {
-          const result = await new window.google.maps.Geocoder().geocode({ location: coords });
-          location = result.results?.[0]?.formatted_address || location;
-        } catch { /* coordinates remain usable */ }
-        onMapPick({ coords, location });
+        const place = await namedPlaceFromMapClick(window.google.maps, event);
+        if (place && requestId === mapPickRequest.current) mapPickCallback.current(place);
       });
     }
     if (currentLocation && !locationMarker.current) {
@@ -406,8 +418,12 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
     }
     overlays.current.forEach((overlay) => overlay.setMap(null));
     overlays.current = [];
-    onTravelTimesChange({});
-    setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
+    const routeChanged = routeCache.current?.key !== routeKey || travelTimesStopsKey.current !== stopIdsKey;
+    if (routeChanged) {
+      travelTimesStopsKey.current = stopIdsKey;
+      onTravelTimesChange({});
+      setRouteStatus(routePoints.length > 1 ? 'loading' : 'idle');
+    }
     const bounds = new window.google.maps.LatLngBounds();
     const showPreviousMarker = connectPreviousDay
       && (!selectedActivityId || selectedStart?.fromPreviousDay || selectedPreviousActivity);
@@ -550,10 +566,10 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
           if (cancelled) return;
           const travelTimes = travelTimesForRoutes(routeStops, drivingRoutes, fallbackDestinationIndexes, missingLegs);
           if (!drivingRoutes.length) {
-            onTravelTimesChange(travelTimes);
+            if (routeChanged) onTravelTimesChange(travelTimes);
             throw new Error('ルートが見つかりませんでした');
           }
-          onTravelTimesChange(travelTimes);
+          if (routeChanged) onTravelTimesChange(travelTimes);
           const routeCasingOptions = { strokeColor: '#303841', strokeOpacity: 0.42, strokeWeight: 8, zIndex: 1 };
           const routeLegs = routeLegsForDisplay(
             routeStops,
@@ -604,7 +620,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [apiKey, day, previousDay, mapStatus, onMapPick, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors, viewportMode]);
+  }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors]);
 
   const accessCard = (authorizationError = false) => (
     <div className="map-key-card">
@@ -671,7 +687,7 @@ function GoogleMap({ apiKey, day, previousDay, onMapPick, onTravelTimesChange, t
         onClose={() => setSelection(null)} onGuide={onGuide} />
     </div>
   );
-}
+});
 
 function SearchBar({ apiKey, onResult }) {
   const [query, setQuery] = useState('');
@@ -984,10 +1000,10 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
   );
 }
 
-function ActivityForm({ initial, onSave, onClose, apiKey, tripId }) {
+function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId }) {
   const [form, setForm] = useState({
     time: '10:00', title: '', location: '', notes: '', coords: null, travelMode: 'DRIVING', images: [], ...initial,
-    images: initial?.images || [],
+    images: initial?.images || [], date: currentDate,
   });
   const [pendingImages, setPendingImages] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -1019,7 +1035,8 @@ function ActivityForm({ initial, onSave, onClose, apiKey, tripId }) {
     setImageError('');
     try {
       const uploaded = await Promise.all(pendingImages.map(({ file }) => uploadPlanImage(tripId, file)));
-      onSave({ ...form, images: [...form.images, ...uploaded], id: form.id || uid() });
+      const { date, ...activity } = form;
+      onSave({ ...activity, images: [...activity.images, ...uploaded], id: activity.id || uid() }, date);
     } catch (error) {
       setImageError(error.message || '写真をアップロードできませんでした。');
       setBusy(false);
@@ -1028,6 +1045,7 @@ function ActivityForm({ initial, onSave, onClose, apiKey, tripId }) {
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={() => { if (!busy) onClose(); }}>
       <form className="form-grid" onSubmit={submit}>
+        <label className="field date-field"><span>日付</span><input type="date" required value={form.date} onChange={(e) => set('date', e.target.value)} /></label>
         <label className="field time-field"><span>時刻</span><input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} /></label>
         <label className="field title-field"><span>予定</span><input autoFocus required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
         <div className="field full"><span>場所</span>
@@ -1148,13 +1166,12 @@ function App() {
     updateTrip((current) => ({ ...current, days: current.days.map((item, index) => index === dayIndex ? updater(item) : item) }));
   }, [updateTrip, dayIndex]);
 
-  const saveActivity = (activity) => {
-    updateDay((current) => ({
-      ...current,
-      activities: sortActivitiesByTime(current.activities.some((item) => item.id === activity.id)
-        ? current.activities.map((item) => item.id === activity.id ? activity : item)
-        : [...current.activities, activity]),
-    }));
+  const saveActivity = (activity, targetDate) => {
+    const sourceDayId = modal?.dayId || day.id;
+    const newDayId = uid();
+    const nextTrip = saveActivityOnDate(trip, sourceDayId, activity, targetDate, newDayId);
+    updateTrip((current) => saveActivityOnDate(current, sourceDayId, activity, targetDate, newDayId));
+    setDayIndex(nextTrip.days.findIndex((item) => item.date === targetDate));
     setModal(null);
   };
   const createTrip = (form) => {
@@ -1180,7 +1197,8 @@ function App() {
     setDayIndex(dayIndex + 1);
     setModal({ type: 'day', day: newDay });
   };
-  const mapPick = useCallback((place) => setModal({ type: 'activity', activity: { time: '10:00', title: '', notes: '', ...place } }), []);
+  const mapPick = useCallback((place) => setModal({ type: 'activity', dayId: day?.id, activity: { time: '10:00', title: '', notes: '', ...place } }), [day?.id]);
+  const openGuide = useCallback((activity) => setReader({ trip, activity }), [trip]);
   const saveCurrentTripOffline = async () => {
     if (!trip || offlineSave.status === 'saving') return;
     setOfflineSave({ tripId: trip.id, status: 'saving', message: 'オフライン保存を準備しています…' });
@@ -1245,18 +1263,18 @@ function App() {
         <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
           varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
-          onGuide={(activity) => setReader({ trip, activity })} viewportMode={sheetStage === 'half' ? 'half' : 'full'} />
+          onGuide={openGuide} />
         <div className="desktop-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
-        <div className="map-hint"><MapPin size={14} /> 地図をタップして予定を追加</div>
+        <div className="map-hint"><MapPin size={14} /> 地図上の名前がある場所をタップして予定を追加</div>
         {offlineSave.tripId === trip.id && offlineSave.message && <div className={`offline-save-status is-${offlineSave.status}`} role="status">
           {offlineSave.status === 'saving' && <LoaderCircle className="offline-save-spinner" size={15} />}
           {offlineSave.message}
         </div>}
       </section>
-      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity' })} onEdit={(activity) => setModal({ type: 'activity', activity })} onDelete={(id) => {
+      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity', dayId: day.id })} onEdit={(activity) => setModal({ type: 'activity', dayId: day.id, activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
-      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={(activity) => setReader({ trip, activity })}
+      }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={openGuide}
       onSelect={(activity, options = {}) => {
         setMapFocus({ activityId: activity.id, previousDay: options.previousDay, requestId: uid(), mode: 'toggle' });
         if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
@@ -1267,7 +1285,7 @@ function App() {
         if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
-      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
+      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
         <div className="modal-actions">

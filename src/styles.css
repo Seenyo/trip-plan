@@ -182,12 +182,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .modal { width: min(510px, 100%); max-height: min(760px, calc(100dvh - 44px)); overflow-y: auto; padding: 27px; background: var(--paper); border-radius: 18px; box-shadow: 0 24px 70px rgba(40,50,55,.2); animation: rise-in .24s cubic-bezier(.2,.9,.3,1) both; }
 .modal-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 23px; }
 .modal-heading h2 { margin: 7px 0 0; font: 400 25px/1 'Archivo Black', sans-serif; letter-spacing: -.035em; }
-.form-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px 12px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
 .field { display: grid; gap: 6px; color: var(--ink); font-size: 9px; font-weight: 700; }
 .field > span { margin-left: 2px; }
 .field input, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; outline: 0; color: var(--ink); background: white; font-size: 11px; resize: vertical; }
 .field input:focus, .field textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,87,34,.08); }
 .field.full, .full { grid-column: 1 / -1; }
+.title-field { grid-column: 1 / -1; }
 .travel-mode-field { margin: 0; padding: 0; border: 0; }
 .travel-mode-field legend { margin: 0 0 6px 2px; padding: 0; }
 .travel-mode-field > small { color: var(--muted); font-size: 8px; font-weight: 500; }
@@ -262,10 +263,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .map-route-note { top: 148px; }
   .desktop-day-strip, .map-hint { display: none; }
   .map-key-card { top: 38%; }
-  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; top: calc(100dvh - var(--sheet-peek-height, 0px) - env(safe-area-inset-bottom)); height: auto; padding: 0 17px calc(24px + env(safe-area-inset-bottom)); border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: top .38s cubic-bezier(.2,.85,.2,1), border-radius .22s ease; overflow-y: hidden; touch-action: pan-y; }
+  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; top: 0; height: 100dvh; padding: 0 17px calc(24px + env(safe-area-inset-bottom)); border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transform: translateY(calc(100dvh - var(--sheet-peek-height, 0px) - env(safe-area-inset-bottom))); transition: transform .38s cubic-bezier(.2,.85,.2,1), border-radius .22s ease; will-change: transform; overflow-y: hidden; touch-action: pan-y; }
   .app-shell.timeline-hidden .itinerary-sheet { padding: 0 17px calc(24px + env(safe-area-inset-bottom)); opacity: 1; visibility: visible; pointer-events: auto; }
-  .itinerary-sheet.sheet-half { top: 50dvh; overflow-y: auto; overscroll-behavior-y: contain; }
-  .itinerary-sheet.sheet-full { top: 0; padding-top: env(safe-area-inset-top); border-radius: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+  .itinerary-sheet.sheet-half { transform: translateY(50dvh); overflow-y: auto; overscroll-behavior-y: contain; }
+  .itinerary-sheet.sheet-full { transform: translateY(0); padding-top: env(safe-area-inset-top); border-radius: 0; overflow-y: auto; overscroll-behavior-y: contain; }
   .sheet-handle-wrap { position: sticky; top: 0; z-index: 3; width: 100%; height: 27px; display: grid; place-items: center; border: 0; background: linear-gradient(var(--paper) 72%, transparent); }
   .sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: rgba(48,56,65,.22); }
   .mobile-day-strip { display: block; margin: 0 -2px; padding-bottom: 8px; }
@@ -308,7 +309,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 
 @media (max-width: 430px) {
   .form-grid { grid-template-columns: 1fr 1.4fr; }
-  .title-field { grid-column: auto; }
+  .date-field { min-width: 0; }
   .map-fallback .map-key-card { top: 38%; }
 }
 

@@ -7,6 +7,31 @@ export const sortActivitiesByTime = (activities) => activities
   })
   .map(({ activity }) => activity);
 
+export const saveActivityOnDate = (trip, sourceDayId, activity, targetDate, newDayId) => {
+  const sourceDay = trip.days.find((day) => day.id === sourceDayId);
+  if (!sourceDay || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return trip;
+  const targetDay = trip.days.find((day) => day.date === targetDate && day.id === sourceDayId)
+    || trip.days.find((day) => day.date === targetDate);
+  const days = trip.days.map((day) => {
+    const remaining = day.id === sourceDayId
+      ? day.activities.filter((item) => item.id !== activity.id)
+      : day.activities;
+    return day.id === targetDay?.id
+      ? { ...day, activities: sortActivitiesByTime([...remaining, activity]) }
+      : day.id === sourceDayId ? { ...day, activities: remaining } : day;
+  });
+  if (!targetDay) {
+    days.push({ id: newDayId, date: targetDate, title: '新しい一日', note: '', activities: [activity] });
+  }
+  days.sort((a, b) => a.date.localeCompare(b.date));
+  return {
+    ...trip,
+    days,
+    startDate: days[0]?.date || trip.startDate,
+    endDate: days.at(-1)?.date || trip.endDate,
+  };
+};
+
 export const sortTripsByStartDate = (trips) => trips
   .map((trip, index) => ({ trip, index }))
   .sort((a, b) => {
