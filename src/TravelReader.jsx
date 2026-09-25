@@ -136,7 +136,7 @@ export default function TravelReader({ trip, activity, onClose }) {
     };
     const unload = (event) => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('keydown', key); window.addEventListener('beforeunload', unload);
-    return () => { if (root) root.inert = false; previous?.focus(); window.removeEventListener('keydown', key); window.removeEventListener('beforeunload', unload); };
+    return () => { if (root) root.inert = false; previous?.focus({ preventScroll: true }); window.removeEventListener('keydown', key); window.removeEventListener('beforeunload', unload); };
   }, []);
   const change = (next) => {
     dirtyRef.current = true;

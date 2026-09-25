@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 
 const oldTrip = {
@@ -8,7 +8,7 @@ const oldTrip = {
   days: [{
     id: 'old-day', date: '2020-05-01', title: '一日目', activities: [
       { id: 'a', time: '09:00', title: 'A地点', coords: { lat: 35, lng: 139 } },
-      { id: 'b', time: '10:00', title: 'B地点', coords: { lat: 35.1, lng: 139.1 } },
+      { id: 'b', time: '10:00', title: 'B地点', coords: { lat: 35.1, lng: 139.1 }, images: [{ path: 'test/photo', alt: 'B地点の写真' }] },
       { id: 'c', time: '11:00', title: 'C地点', coords: { lat: 35.2, lng: 139.2 } },
     ],
   }],
@@ -17,10 +17,15 @@ const oldTrip = {
 vi.mock('../src/useSharedWorkspace', () => ({
   useSharedWorkspace: () => ({ trips: [oldTrip], setTrips: vi.fn(), syncStatus: 'local' }),
 }));
+vi.mock('../src/offlineTrip', async (importOriginal) => ({
+  ...await importOriginal(), offlineAttachmentBlob: vi.fn().mockResolvedValue(new Blob(['photo'])),
+}));
 
 it('offers new and past trips, then preserves the half sheet when a plan is selected', async () => {
   localStorage.clear();
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+  URL.createObjectURL = vi.fn(() => 'blob:photo');
+  URL.revokeObjectURL = vi.fn();
   window.matchMedia = vi.fn((query) => ({ matches: query.includes('max-width'), addListener: vi.fn(), removeListener: vi.fn() }));
   document.body.innerHTML = '<div id="root"></div>';
   await act(async () => { await import('../src/main.jsx'); });
@@ -43,6 +48,17 @@ it('offers new and past trips, then preserves the half sheet when a plan is sele
   const detail = document.querySelector('.activity-detail-card');
   expect(detail.querySelector('h2').textContent).toBe('B地点');
   expect(detail.querySelector('[aria-label="B地点の地点ガイドを開く"]').textContent).toBe('');
+
+  sheet.scrollTop = 150;
+  for (const container of [sheet, detail]) {
+    const photo = await within(container).findByRole('button', { name: 'B地点の写真を拡大' });
+    fireEvent.click(photo);
+    expect(screen.getByRole('dialog', { name: '写真を拡大表示' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '写真を閉じる' }));
+    expect(sheet.dataset.sheetStage).toBe('half');
+    expect(sheet.scrollTop).toBe(150);
+    expect(detail.querySelector('h2').textContent).toBe('B地点');
+  }
 
   await act(async () => { window.__roamRoot.unmount(); });
   delete window.__roamRoot;
