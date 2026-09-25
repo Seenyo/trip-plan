@@ -25,12 +25,12 @@ describe('trip bookmarks', () => {
     expect(BOOKMARK_CATEGORIES.map(({ label }) => label)).toContain('スーパー');
     expect(BOOKMARK_CATEGORIES.map(({ label }) => label)).toContain('遺跡');
     const activity = { id: 'stop-1', title: '古い教会', location: 'アイスランド', coords: { lat: 64, lng: -21 },
-      time: '11:00', notes: '入口を確認', images: [{ path: 'trip/photo' }], travelMode: 'WALKING' };
+      time: '11:00', notes: '入口を確認', images: [{ path: 'trip/photo' }], travelMode: 'WALKING', route: false };
     const trip = { id: 'iceland', days: [{ id: 'day-1', activities: [activity, { id: 'stop-2' }] }] };
     const moved = moveActivityToBookmark(trip, 'day-1', activity, 'heritage', 'bookmark-1');
     expect(moved.days[0].activities.map(({ id }) => id)).toEqual(['stop-2']);
     expect(moved.bookmarks[0]).toMatchObject({ title: '古い教会', category: 'heritage', notes: '入口を確認',
-      images: [{ path: 'trip/photo' }], time: '11:00', travelMode: 'WALKING' });
+      images: [{ path: 'trip/photo' }], time: '11:00', travelMode: 'WALKING', route: false });
     expect(trip.days[0].activities).toHaveLength(2);
     expect(moveActivityToBookmark(trip, 'day-1', { ...activity, coords: null }, 'heritage', 'bookmark-2').bookmarks[0].coords).toBeNull();
   });

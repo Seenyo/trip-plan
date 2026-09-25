@@ -681,7 +681,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
     if (!focusRequest?.bookmarkId || !focusRequest?.requestId || !mapRef.current) return;
     if (handledFocusRequest.current === focusRequest.requestId) return;
     const bookmark = bookmarks.find((item) => item.id === focusRequest.bookmarkId);
-    if (!bookmark) return;
+    if (!bookmark || !Number.isFinite(bookmark.coords?.lat) || !Number.isFinite(bookmark.coords?.lng)) return;
     handledFocusRequest.current = focusRequest.requestId;
     setSelection({ type: 'bookmark', bookmarkId: bookmark.id });
     mapRef.current.panTo(bookmark.coords);
@@ -1413,14 +1413,17 @@ function App() {
   const addBookmarkToPlan = useCallback((bookmark) => setModal({
     type: 'activity', dayId: day?.id,
     activity: { time: bookmark.time || '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords,
-      notes: bookmark.notes || '', images: bookmark.images || [], travelMode: bookmark.travelMode || 'DRIVING' },
+      notes: bookmark.notes || '', images: bookmark.images || [], travelMode: bookmark.travelMode || 'DRIVING',
+      ...(bookmark.route === false ? { route: false } : {}) },
   }), [day?.id]);
   const editBookmark = useCallback((bookmark) => setModal({ type: 'placeChoice', place: bookmark }), []);
   const saveBookmark = (place, category) => {
     const existing = findMatchingBookmark(bookmarks, place);
     const newId = uid();
     updateTrip((current) => saveTripBookmark(current, place, category, newId));
-    setMapFocus({ bookmarkId: existing?.id || newId, requestId: uid() });
+    const coords = place.coords || existing?.coords;
+    setMapFocus(Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng)
+      ? { bookmarkId: existing?.id || newId, requestId: uid() } : null);
     if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
     setModal(null);
   };
@@ -1428,7 +1431,9 @@ function App() {
     const existing = findMatchingBookmark(bookmarks, place);
     const newId = uid();
     updateTrip((current) => moveActivityToBookmark(current, source.dayId, place, category, newId));
-    setMapFocus({ bookmarkId: existing?.id || newId, requestId: uid() });
+    const coords = place.coords || existing?.coords;
+    setMapFocus(Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng)
+      ? { bookmarkId: existing?.id || newId, requestId: uid() } : null);
     if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
     setModal(null);
   };

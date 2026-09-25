@@ -29,7 +29,7 @@ export function saveTripBookmark(trip, place, category, newId) {
     location: place.location || '',
     coords: place.coords || existing?.coords || null,
     category: bookmarkCategory(category).id,
-    ...Object.fromEntries(['notes', 'images', 'time', 'travelMode'].filter((key) => place[key] !== undefined || existing?.[key] !== undefined)
+    ...Object.fromEntries(['notes', 'images', 'time', 'travelMode', 'route'].filter((key) => place[key] !== undefined || existing?.[key] !== undefined)
       .map((key) => [key, place[key] ?? existing[key]])),
   };
   return {

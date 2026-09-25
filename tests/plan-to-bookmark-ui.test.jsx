@@ -3,14 +3,17 @@ import React from 'react';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 
+const workspace = vi.hoisted(() => ({ trips: null }));
+
 vi.mock('../src/useSharedWorkspace', () => ({
   useSharedWorkspace: () => {
     const [trips, setTrips] = React.useState([{
       id: 'trip', title: '旅', subtitle: '', startDate: '2026-10-01', endDate: '2026-10-01',
       days: [{ id: 'day', date: '2026-10-01', title: '一日目', activities: [
-        { id: 'plan', title: '古い教会', time: '11:00', location: 'アイスランド', coords: { lat: 64, lng: -21 }, notes: '入口を確認' },
+        { id: 'plan', title: '古い教会', time: '11:00', location: 'アイスランド', coords: { lat: 64, lng: -21 }, notes: '入口を確認', route: false },
       ] }],
     }]);
+    workspace.trips = trips;
     return { trips, setTrips, undo: vi.fn(), redo: vi.fn(), canUndo: false, canRedo: false, syncStatus: 'local' };
   },
 }));
@@ -32,6 +35,11 @@ it('moves an edited plan into the chosen bookmark category', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'ブックマークを開く（1件）' }));
   fireEvent.click(screen.getByRole('button', { name: '遺跡' }));
   expect(screen.getByRole('button', { name: '古い教会の詳細を表示' })).toBeTruthy();
+  expect(workspace.trips[0].bookmarks[0].route).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: '古い教会の詳細を表示' }));
+  fireEvent.click(screen.getByRole('button', { name: 'この日の予定に追加' }));
+  fireEvent.click(screen.getByRole('button', { name: '予定を保存' }));
+  await waitFor(() => expect(workspace.trips[0].days[0].activities[0].route).toBe(false));
 
   await act(async () => { window.__roamRoot.unmount(); });
   delete window.__roamRoot;
