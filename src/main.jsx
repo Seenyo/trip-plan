@@ -183,6 +183,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
         {store.location && <p>{store.location}</p>}
         {store.googleMapsURI && <a href={store.googleMapsURI} target="_blank" rel="noreferrer">Google Mapsで開く <ExternalLink size={14} /></a>}
       </div>
+      <PlacePhotos item={store} />
     </article>;
   }
   if (selection.type === 'charger') {
@@ -197,6 +198,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
         {charger.location && <p>{charger.location}</p>}
         {charger.googleMapsURI && <a href={charger.googleMapsURI} target="_blank" rel="noreferrer">Google Mapsで開く <ExternalLink size={14} /></a>}
       </div>
+      <PlacePhotos item={charger} />
     </article>;
   }
   if (selection.type === 'bookmark') {
@@ -214,7 +216,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
           <button onClick={() => onEditBookmark(bookmark)}>カテゴリを変更</button>
         </div>
       </div>
-      {!bookmark.images?.length && <PlacePhotos item={bookmark} />}
+      <PlacePhotos item={bookmark} />
     </article>;
   }
   const activity = selection.item;
@@ -232,7 +234,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
       </div>}
       {activity.location && <p>{activity.location}</p>}
     </div>
-    {!firstImage && <PlacePhotos item={activity} />}
+    <PlacePhotos item={activity} />
   </article>;
 }
 
@@ -1305,6 +1307,7 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
     {place.location && <p className="bookmark-place-address">{place.location}</p>}
     {place.notes && <p className="bookmark-place-notes">{place.notes}</p>}
     {place.images?.[0] && <PlanImage image={place.images[0]} className="bookmark-place-image" expandable />}
+    {!movingFromPlan && <PlacePhotos item={place} variant="modal" />}
     {pendingPhotoCount > 0 && <p className="bookmark-pending-photos">追加した写真 {pendingPhotoCount}枚は、候補への移動を確定してからアップロードします。</p>}
     {!movingFromPlan && <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>}
     <fieldset className="bookmark-category-field">

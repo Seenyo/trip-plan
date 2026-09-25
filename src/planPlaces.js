@@ -78,6 +78,7 @@ export async function searchBonusStores(maps, activities) {
     const id = place.id || `${coords.lat},${coords.lng}`;
     if (!unique.has(id)) unique.set(id, {
       id,
+      placeId: place.id || null,
       title: place.displayName || 'Bónus',
       location: place.formattedAddress || '',
       coords,
@@ -114,6 +115,7 @@ export async function searchEvChargers(maps, activities) {
     if (current && current.distanceFromHotelKm <= distanceFromHotelKm) return;
     unique.set(id, {
       id,
+      placeId: place.id || null,
       title: place.displayName || 'EV充電スポット',
       location: place.formattedAddress || '',
       coords,

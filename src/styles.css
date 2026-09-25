@@ -435,7 +435,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-detail-card .bookmark-detail-image, .bookmark-detail-card .plan-image-placeholder { width: 72px; height: 100%; min-height: 112px; display: block; object-fit: cover; }
 .bookmark-detail-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .bookmark-detail-actions button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 8px; color: white; background: var(--slate); font-size: 9px; font-weight: 700; cursor: pointer; }
-.map-place-photos { grid-column: 1 / -1; display: flex; gap: 8px; padding: 0 12px 12px; }
+.map-place-photos { grid-column: 1 / -1; min-width: 0; padding: 0 12px 12px; }
+.map-place-photos-heading { display: block; margin-bottom: 6px; color: var(--slate); font-size: 10px; }
+.map-place-photo-list { display: flex; gap: 8px; }
+.map-place-photos-status { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.map-place-photos-status button { padding: 0; border: 0; color: var(--slate); background: none; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.map-place-photos.is-modal { margin: 0 0 14px; padding: 0; }
 .map-place-photo { min-width: 0; flex: 1 1 0; }
 .map-place-photo-image { height: 82px; display: block; overflow: hidden; border-radius: 9px; background: var(--soft); }
 .map-place-photo-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
