@@ -57,6 +57,7 @@ import { migrateTripsForCurrentApp } from './tripMigrations';
 import './styles.css';
 import PlaceSearch from './PlaceSearch';
 import PlanImage from './PlanImage';
+import PlacePhotos from './GooglePlacePhotos';
 import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
@@ -213,6 +214,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
           <button onClick={() => onEditBookmark(bookmark)}>カテゴリを変更</button>
         </div>
       </div>
+      {!bookmark.images?.length && <PlacePhotos item={bookmark} />}
     </article>;
   }
   const activity = selection.item;
@@ -230,6 +232,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
       </div>}
       {activity.location && <p>{activity.location}</p>}
     </div>
+    {!firstImage && <PlacePhotos item={activity} />}
   </article>;
 }
 
@@ -1160,8 +1163,8 @@ function ActivityForm({ initial, currentDate, onSave, onMoveToBookmark, onClose,
         <label className="field title-field"><span>予定</span><input required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="夕食、美術館、電車など" /></label>
         <div className="field full"><span>場所</span>
           <PlaceSearch value={form.location} apiKey={apiKey}
-            onChange={(location) => setForm((current) => ({ ...current, location, coords: null }))}
-            onSelect={({ location, coords }) => setForm((current) => ({ ...current, location, coords }))} />
+            onChange={(location) => setForm((current) => ({ ...current, location, coords: null, placeId: null }))}
+            onSelect={({ location, coords, placeId }) => setForm((current) => ({ ...current, location, coords, placeId }))} />
           {form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}
         </div>
         <fieldset className={`field travel-mode-field ${initial?.id ? '' : 'full'}`}>
@@ -1460,7 +1463,7 @@ function App() {
   const mapPick = useCallback((place) => setModal({ type: 'placeChoice', place }), []);
   const addBookmarkToPlan = useCallback((bookmark) => setModal({
     type: 'activity', dayId: day?.id,
-    activity: { time: bookmark.time || '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords,
+    activity: { time: bookmark.time || '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords, placeId: bookmark.placeId,
       notes: bookmark.notes || '', images: bookmark.images || [], travelMode: bookmark.travelMode || 'DRIVING',
       ...(bookmark.route === false ? { route: false } : {}) },
   }), [day?.id]);
