@@ -26,7 +26,7 @@ describe('plan place features', () => {
 
     const stores = await searchBonusStores(maps, [{ coords: { lat: 64, lng: -22 } }]);
 
-    expect(stores).toEqual([{ id: 'bonus', title: 'Bónus Fitjar', location: 'Keflavík', coords: { lat: 64, lng: -22 }, googleMapsURI: 'https://maps.example/bonus' }]);
+    expect(stores).toEqual([{ id: 'bonus', placeId: 'bonus', title: 'Bónus Fitjar', location: 'Keflavík', coords: { lat: 64, lng: -22 }, googleMapsURI: 'https://maps.example/bonus' }]);
     expect(searchByText).toHaveBeenCalledWith(expect.objectContaining({ textQuery: 'Bónus supermarket', includedType: 'supermarket' }));
   });
 
@@ -45,7 +45,7 @@ describe('plan place features', () => {
     const chargers = await searchEvChargers(maps, [hotel, { id: 'museum', title: 'Museum', coords: hotel.coords }]);
 
     expect(chargers).toHaveLength(1);
-    expect(chargers[0]).toMatchObject({ id: 'near', hotelId: hotel.id, hotelTitle: hotel.title });
+    expect(chargers[0]).toMatchObject({ id: 'near', placeId: 'near', hotelId: hotel.id, hotelTitle: hotel.title });
     expect(searchNearby).toHaveBeenCalledWith(expect.objectContaining({
       includedPrimaryTypes: ['electric_vehicle_charging_station'],
       maxResultCount: 3,
