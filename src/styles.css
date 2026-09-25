@@ -33,6 +33,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 
 .finished-trip-screen { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; padding: 28px clamp(20px, 6vw, 80px); color: var(--paper); background: var(--slate); }
 .finished-trip-brand { display: flex; align-items: center; gap: 11px; font-family: 'Archivo Black', sans-serif; letter-spacing: .07em; font-size: 16px; }
+.finished-trip-history { display: flex; gap: 7px; margin-left: auto; }
+.finished-trip-history button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid rgba(245,245,245,.25); border-radius: 10px; color: var(--paper); background: rgba(245,245,245,.08); }
+.finished-trip-history button:disabled { opacity: .4; }
 .finished-trip-brand .brand-mark { background: var(--paper); }
 .finished-trip-content { width: min(580px, 100%); margin: auto; padding: 40px 0 80px; }
 .finished-trip-symbol { width: 64px; height: 64px; display: grid; place-items: center; margin-bottom: 29px; border-radius: 19px; color: white; background: var(--orange); }
@@ -143,7 +146,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 /* Day plan */
 .itinerary-sheet { height: 100%; min-width: 0; padding: 34px 28px 28px; background: var(--paper); overflow-y: auto; z-index: 10; box-shadow: -10px 0 32px rgba(40,50,55,.07); transition: padding .24s ease, opacity .18s ease; }
 .timeline-hidden .itinerary-sheet { padding-left: 0; padding-right: 0; opacity: 0; visibility: hidden; pointer-events: none; }
-.sheet-handle-wrap, .mobile-day-strip { display: none; }
+.sheet-control-row, .mobile-day-strip { display: none; }
 .sheet-title-row { display: flex; align-items: flex-start; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
 .sheet-title-row > div { min-width: 0; flex: 1; }
 .sheet-title-row .eyebrow { color: var(--orange); }
@@ -225,6 +228,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .travel-mode-field { margin: 0; padding: 0; border: 0; }
 .travel-mode-field legend { margin: 0 0 6px 2px; padding: 0; }
 .travel-mode-field > small { color: var(--muted); font-size: 8px; font-weight: 500; }
+.bookmark-move-field { align-content: start; }
+.bookmark-move-field > small { color: var(--muted); font-size: 8px; font-weight: 500; }
+.bookmark-move-button { min-height: 39px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--slate); background: white; font-size: 10px; font-weight: 700; cursor: pointer; }
+.bookmark-move-button:disabled { opacity: .46; cursor: default; }
 .travel-mode-options { width: fit-content; display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: rgba(48,56,65,.08); }
 .travel-mode-options label { min-width: 74px; padding: 8px 14px; border-radius: 8px; color: var(--muted); text-align: center; cursor: pointer; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
 .travel-mode-options label.active { color: var(--ink); background: white; box-shadow: 0 2px 7px rgba(48,56,65,.11); }
@@ -284,6 +291,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   body { overscroll-behavior: none; }
   .app-shell { position: relative; display: block; width: 100%; height: 100dvh; }
   .timeline-toggle { display: none; }
+  .topbar .history-button { display: none; }
   .trip-rail { position: fixed; inset: 0 auto 0 0; width: min(84vw, 326px); transform: translateX(-105%); transition: transform .28s cubic-bezier(.2,.8,.2,1); box-shadow: 14px 0 36px rgba(48,56,65,.18); }
   .trip-rail.rail-open { transform: translateX(0); }
   .rail-scrim { display: block; position: fixed; z-index: 29; inset: 0; border: 0; background: rgba(48,56,65,.28); backdrop-filter: blur(2px); }
@@ -298,11 +306,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .map-key-card { top: 38%; }
   /* The scrollport must fit the visible sheet: translating a 100dvh scrollport
      below the viewport hides its last stops and puts the drag-scroll edge offscreen. */
-  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; height: calc(var(--sheet-peek-height, 0px) + env(safe-area-inset-bottom)); padding: 0 17px; border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: height .32s cubic-bezier(.2,.85,.2,1), border-radius .22s ease; overflow: hidden; touch-action: manipulation; }
+  .itinerary-sheet { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; height: calc(var(--sheet-peek-height, 0px) + env(safe-area-inset-bottom)); padding: 0 17px; border-radius: 21px 21px 0 0; box-shadow: 0 -10px 30px rgba(48,56,65,.13); transition: height .32s cubic-bezier(.2,.85,.2,1), border-radius .22s ease; overflow: hidden; touch-action: pan-y pinch-zoom; }
   .app-shell.timeline-hidden .itinerary-sheet { padding-left: 17px; padding-right: 17px; opacity: 1; visibility: visible; pointer-events: auto; }
   .itinerary-sheet.sheet-half { height: 50dvh; padding-bottom: calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior-y: contain; }
   .itinerary-sheet.sheet-full { height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: calc(24px + env(safe-area-inset-bottom)); border-radius: 0; overflow-y: auto; overscroll-behavior-y: contain; }
-  .sheet-handle-wrap { position: sticky; top: 0; z-index: 3; width: 100%; height: 27px; display: grid; place-items: center; border: 0; background: linear-gradient(var(--paper) 72%, transparent); }
+  .sheet-control-row { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: 1fr; height: 44px; background: linear-gradient(var(--paper) 80%, transparent); }
+  .sheet-handle-wrap { grid-area: 1 / 1; width: 100%; height: 44px; display: grid; place-items: center; border: 0; background: transparent; }
+  .sheet-history-actions { grid-area: 1 / 1; z-index: 1; display: flex; justify-self: end; gap: 3px; }
+  .sheet-history-actions button { width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 10px; color: var(--slate); background: transparent; }
+  .sheet-history-actions button:disabled { opacity: .38; }
   .sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: rgba(48,56,65,.22); }
   .mobile-day-strip { display: block; margin: 0 -2px; padding-bottom: 8px; }
   .day-strip { padding: 3px; }
@@ -384,8 +396,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-food { --bookmark-color: #dc7350; }
 .bookmark-nature { --bookmark-color: #599b68; }
 .bookmark-facility { --bookmark-color: #7979b7; }
+.bookmark-supermarket { --bookmark-color: #4e9f9a; }
+.bookmark-heritage { --bookmark-color: #a98054; }
 .bookmark-other { --bookmark-color: #688b9f; }
-.map-bookmark-marker.bookmark-food, .map-bookmark-marker.bookmark-nature, .map-bookmark-marker.bookmark-facility, .map-bookmark-marker.bookmark-other { background: var(--bookmark-color); }
+.map-bookmark-marker.bookmark-food, .map-bookmark-marker.bookmark-nature, .map-bookmark-marker.bookmark-facility, .map-bookmark-marker.bookmark-supermarket, .map-bookmark-marker.bookmark-heritage, .map-bookmark-marker.bookmark-other { background: var(--bookmark-color); }
 .map-current-location { position: absolute; z-index: 4; transform: translate(-50%, -50%); width: 22px; height: 22px; padding: 0; border: 3px solid white; border-radius: 50%; background: #3f86f5; box-shadow: 0 0 0 8px rgba(63,134,245,.19), 0 3px 10px rgba(48,56,65,.25); cursor: pointer; }
 .map-location-button { position: absolute; z-index: 7; right: 18px; bottom: 116px; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 12px; color: var(--slate); background: rgba(252,252,250,.97); box-shadow: 0 8px 22px rgba(48,56,65,.16); cursor: pointer; }
 .map-location-button.is-active { color: #3f86f5; }
@@ -421,16 +435,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-detail-card .map-detail-symbol { width: 38px; height: 38px; margin: 17px 0 0 14px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--bookmark-color); }
 .bookmark-detail-card .map-detail-copy { padding-left: 10px; }
 .bookmark-detail-card .map-detail-copy > small { color: var(--bookmark-color); }
+.bookmark-detail-notes { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.bookmark-detail-card.has-bookmark-image { grid-template-columns: 52px 72px minmax(0, 1fr); }
+.bookmark-detail-card .bookmark-detail-image, .bookmark-detail-card .plan-image-placeholder { width: 72px; height: 100%; min-height: 112px; display: block; object-fit: cover; }
 .bookmark-detail-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .bookmark-detail-actions button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 8px; color: white; background: var(--slate); font-size: 9px; font-weight: 700; cursor: pointer; }
 .bookmark-detail-actions button + button { color: var(--slate); background: var(--soft); }
 
 .bookmark-place-address { margin: -7px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.bookmark-place-notes { margin: 0 0 14px; color: var(--ink); font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
+.bookmark-place-image { width: 96px; height: 96px; margin: 0 0 14px; }
 .bookmark-plan-action { width: 100%; min-height: 45px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 11px; color: var(--slate); background: white; font-size: 12px; font-weight: 700; cursor: pointer; }
 .bookmark-category-field { margin: 20px 0 0; padding: 0; border: 0; }
 .bookmark-category-field legend { font-size: 12px; font-weight: 700; }
 .bookmark-category-field > p { margin: 6px 0 12px; color: var(--muted); font-size: 10px; }
-.bookmark-category-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.bookmark-category-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .bookmark-category-option { min-width: 0; min-height: 64px; display: grid; justify-items: center; align-content: center; gap: 5px; border: 1px solid var(--line); border-radius: 10px; background: white; font-size: 10px; font-weight: 700; cursor: pointer; }
 .bookmark-category-option input { position: absolute; opacity: 0; }
 .bookmark-category-option.is-selected { border-color: var(--bookmark-color); background: color-mix(in srgb, var(--bookmark-color) 9%, white); }

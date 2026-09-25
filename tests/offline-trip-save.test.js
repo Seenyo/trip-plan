@@ -32,3 +32,10 @@ it('does not mark downloaded documents fresh when the device cache rejects them'
   expect(documents.cacheDocuments).toHaveBeenCalledWith('trip', []);
   expect(saved.documentsFresh).toBe(false);
 });
+
+it('includes photos retained on bookmarks in the offline download', async () => {
+  const saved = await saveTripOffline({ id: 'trip', days: [], bookmarks: [
+    { id: 'candidate', images: [{ path: 'trip/bookmark-photo' }] },
+  ] });
+  expect(saved.mediaTotal).toBe(1);
+});

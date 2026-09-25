@@ -74,6 +74,8 @@ const tripMediaPaths = (trip, documents) => [...new Set([
   ...trip.days.flatMap((day) => day.activities.flatMap((activity) => (
     activity.images || []
   )).map((image) => typeof image === 'string' ? image : image?.path)),
+  ...(trip.bookmarks || []).flatMap((bookmark) => bookmark.images || [])
+    .map((image) => typeof image === 'string' ? image : image?.path),
   ...documents.flatMap((document) => document.blocks
     .filter((block) => ['image', 'file'].includes(block.type))
     .map((block) => block.path)),

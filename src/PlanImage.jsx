@@ -17,6 +17,7 @@ export default function PlanImage({ image, className = '', eager = false, expand
     if (!path) return undefined;
     let active = true;
     let refreshing = false;
+    let refreshPending = false;
     let localUrl = null;
     let timer;
     const replaceLocalUrl = (next = null) => {
@@ -26,7 +27,11 @@ export default function PlanImage({ image, className = '', eager = false, expand
     const refresh = async () => {
       // Safari can fire focus, online and visibilitychange together on resume.
       // Keep one request per image and never let an old path replace a new blob URL.
-      if (!active || refreshing) return;
+      if (!active) return;
+      if (refreshing) {
+        refreshPending = true;
+        return;
+      }
       refreshing = true;
       clearTimeout(timer);
       let delay = 60000;
@@ -57,7 +62,10 @@ export default function PlanImage({ image, className = '', eager = false, expand
         } else setFailed(true);
       } finally {
         refreshing = false;
-        if (active) timer = setTimeout(refresh, delay);
+        if (active && refreshPending) {
+          refreshPending = false;
+          void refresh();
+        } else if (active) timer = setTimeout(refresh, delay);
       }
     };
     const visible = () => { if (document.visibilityState === 'visible') refresh(); };

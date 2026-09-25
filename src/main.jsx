@@ -46,6 +46,8 @@ import {
   Sparkles,
   Store,
   Trash2,
+  Undo2,
+  Redo2,
   X,
   Zap,
 } from 'lucide-react';
@@ -63,7 +65,7 @@ import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTrip
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { namedPlaceFromMapClick } from './mapPlacePick';
 import { closestDayIndex, localDateISO, selectDefaultTrip } from './tripSelection';
-import { BOOKMARK_CATEGORIES, bookmarkCategory, findMatchingBookmark, removeTripBookmark, saveTripBookmark } from './bookmarks';
+import { BOOKMARK_CATEGORIES, bookmarkCategory, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from './bookmarks';
 import { uploadPlanImage } from './travelDocuments';
 import {
   distanceKmBetween,
@@ -198,11 +200,13 @@ function MapDetailCard({ selection, travelTime, onClose, onGuide, onAddBookmarkT
   }
   if (selection.type === 'bookmark') {
     const bookmark = selection.item;
-    return <article className={`map-detail-card bookmark-detail-card bookmark-${bookmark.category}`} aria-live="polite">
+    return <article className={`map-detail-card bookmark-detail-card bookmark-${bookmark.category} ${bookmark.images?.length ? 'has-bookmark-image' : ''}`} aria-live="polite">
       <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
       <span className="map-detail-symbol"><Bookmark size={18} fill="currentColor" /></span>
+      {bookmark.images?.[0] && <PlanImage image={bookmark.images[0]} className="bookmark-detail-image" eager expandable />}
       <div className="map-detail-copy"><small>ブックマーク · {bookmarkCategory(bookmark.category).label}</small><h2>{bookmark.title}</h2>
         {bookmark.location && <p>{bookmark.location}</p>}
+        {bookmark.notes && <p className="bookmark-detail-notes">{bookmark.notes}</p>}
         <div className="bookmark-detail-actions">
           <button onClick={() => onAddBookmarkToPlan(bookmark)}>予定に追加</button>
           <button onClick={() => onEditBookmark(bookmark)}>カテゴリを変更</button>
@@ -927,8 +931,9 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
   );
 }
 
-function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult }) {
+function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult, undo, redo, canUndo, canRedo }) {
   const touch = useRef(null);
+  const dayStripTouch = useRef(null);
   const suppressClickUntil = useRef(0);
   const sheet = useRef(null);
   const handle = useRef(null);
@@ -994,9 +999,21 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
       }}
       onTouchStart={onTouchStart} onTouchMove={(event) => { if (event.touches.length > 1) touch.current = null; }}
       onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }} aria-label="この日の旅程">
-      <button ref={handle} className="sheet-handle-wrap" onClick={() => setStage(stage === 'peek' ? 'half' : 'peek')}
-        aria-label={handleLabel} aria-expanded={stage !== 'peek'}><span className="sheet-handle" /></button>
-      <div ref={mobileDays} className="mobile-day-strip"><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
+      <div className="sheet-control-row">
+        <button ref={handle} className="sheet-handle-wrap" onClick={() => setStage(stage === 'peek' ? 'half' : 'peek')}
+          aria-label={handleLabel} aria-expanded={stage !== 'peek'}><span className="sheet-handle" /></button>
+        <div className="sheet-history-actions">
+          <button onClick={undo} disabled={!canUndo} aria-label="元に戻す" title="元に戻す"><Undo2 size={18} /></button>
+          <button onClick={redo} disabled={!canRedo} aria-label="やり直す" title="やり直す"><Redo2 size={18} /></button>
+        </div>
+      </div>
+      <div ref={mobileDays} className="mobile-day-strip"
+        onTouchStart={(event) => { dayStripTouch.current = { x: event.touches[0]?.clientX, scrollLeft: event.currentTarget.querySelector('.day-strip')?.scrollLeft || 0 }; }}
+        onTouchMove={(event) => {
+          const strip = event.currentTarget.querySelector('.day-strip');
+          if (strip && dayStripTouch.current && event.touches.length === 1) strip.scrollLeft = dayStripTouch.current.scrollLeft + dayStripTouch.current.x - event.touches[0].clientX;
+        }}
+        onTouchEnd={() => { dayStripTouch.current = null; }}><DayStrip trip={trip} dayIndex={dayIndex} setDayIndex={setDayIndex} /></div>
       <div className="sheet-title-row">
         <div>
           <span className="eyebrow">{dayIndex + 1}日目 · {formatDay(day.date)}</span>
@@ -1081,7 +1098,7 @@ function Modal({ title, eyebrow, onClose, children, danger }) {
   );
 }
 
-function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId }) {
+function ActivityForm({ initial, currentDate, onSave, onMoveToBookmark, onClose, apiKey, tripId }) {
   const [form, setForm] = useState({
     time: '10:00', title: '', location: '', notes: '', coords: null, travelMode: 'DRIVING', images: [], ...initial,
     images: initial?.images || [], date: currentDate,
@@ -1123,6 +1140,19 @@ function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId })
       setBusy(false);
     }
   };
+  const moveToBookmark = async () => {
+    if (!initial?.id || !form.title.trim() || busy) return;
+    setBusy(true);
+    setImageError('');
+    try {
+      const uploaded = await Promise.all(pendingImages.map(({ file }) => uploadPlanImage(tripId, file)));
+      const { date, ...activity } = form;
+      onMoveToBookmark({ ...activity, images: [...activity.images, ...uploaded] });
+    } catch (error) {
+      setImageError(error.message || '写真をアップロードできませんでした。');
+      setBusy(false);
+    }
+  };
   return (
     <Modal title={initial?.id ? '予定を編集' : '予定を追加'} eyebrow="この日の旅程" onClose={() => { if (!busy) onClose(); }}>
       <form className="form-grid" onSubmit={submit}>
@@ -1135,7 +1165,7 @@ function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId })
             onSelect={({ location, coords }) => setForm((current) => ({ ...current, location, coords }))} />
           {form.coords && <small className="located"><Check size={12} /> 地図に追加済み</small>}
         </div>
-        <fieldset className="field full travel-mode-field">
+        <fieldset className={`field travel-mode-field ${initial?.id ? '' : 'full'}`}>
           <legend>移動方法</legend>
           <div className="travel-mode-options">
             <label className={travelModeForActivity(form) === 'DRIVING' ? 'active' : ''}>
@@ -1149,6 +1179,12 @@ function ActivityForm({ initial, currentDate, onSave, onClose, apiKey, tripId })
           </div>
           <small>この予定までの移動方法を選べます</small>
         </fieldset>
+        {initial?.id && <div className="field bookmark-move-field"><span>候補として残す</span>
+          <button type="button" className="bookmark-move-button" onClick={moveToBookmark} disabled={!form.title.trim() || busy}>
+            <Bookmark size={17} /> ブックマークに移す
+          </button>
+          <small>{form.coords ? 'カテゴリを選んでから予定から外します' : '場所がない候補は地図に表示されません'}</small>
+        </div>}
         <label className="field full"><span>メモ</span><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="予約情報、注意事項、注文したいものなど" rows="3" /></label>
         <div className="field full plan-photo-field"><span>写真</span>
           {(form.images.length > 0 || pendingImages.length > 0) && <div className="plan-photo-grid">
@@ -1218,14 +1254,16 @@ function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
   );
 }
 
-function PlaceActionModal({ place, existing, onSaveBookmark, onAddToPlan, onClose }) {
+function PlaceActionModal({ place, existing, movingFromPlan, onSaveBookmark, onAddToPlan, onClose }) {
   const [category, setCategory] = useState(existing?.category || 'other');
-  return <Modal title={place.title || '場所'} eyebrow="この旅行の候補" onClose={onClose}>
+  return <Modal title={movingFromPlan ? '予定をブックマークに移す' : place.title || '場所'} eyebrow="この旅行の候補" onClose={onClose}>
     {place.location && <p className="bookmark-place-address">{place.location}</p>}
-    <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>
+    {place.notes && <p className="bookmark-place-notes">{place.notes}</p>}
+    {place.images?.[0] && <PlanImage image={place.images[0]} className="bookmark-place-image" expandable />}
+    {!movingFromPlan && <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>}
     <fieldset className="bookmark-category-field">
       <legend>{existing ? '保存先のカテゴリを変更' : 'ブックマークに保存'}</legend>
-      <p>予定に入れる前の候補として、この旅行に保存します。</p>
+      <p>{movingFromPlan ? 'カテゴリを選んで保存すると、この予定を旅程から外します。' : '予定に入れる前の候補として、この旅行に保存します。'}</p>
       <div className="bookmark-category-grid">
         {BOOKMARK_CATEGORIES.map((item) => <label key={item.id} className={`bookmark-category-option bookmark-${item.id} ${category === item.id ? 'is-selected' : ''}`}>
           <input type="radio" name="bookmark-category" value={item.id} checked={category === item.id} onChange={() => setCategory(item.id)} />
@@ -1234,7 +1272,7 @@ function PlaceActionModal({ place, existing, onSaveBookmark, onAddToPlan, onClos
       </div>
     </fieldset>
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button>
-      <button className="primary-button" onClick={() => onSaveBookmark(category)}><Bookmark size={16} /> {existing ? 'ブックマークを更新' : 'ブックマークに保存'}</button></div>
+      <button className="primary-button" onClick={() => onSaveBookmark(category)}><Bookmark size={16} /> {movingFromPlan ? '候補に移す' : existing ? 'ブックマークを更新' : 'ブックマークに保存'}</button></div>
   </Modal>;
 }
 
@@ -1251,19 +1289,25 @@ function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onCl
     </div>
     <label className="bookmark-list-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="候補を検索" aria-label="ブックマークを検索" /></label>
     {visible.length ? <ul className="bookmark-list">{visible.map((bookmark) => <li key={bookmark.id}>
-      <button className="bookmark-list-place" onClick={() => onFocus(bookmark)} aria-label={`${bookmark.title}${mapAvailable ? 'を地図で表示' : 'の詳細を表示'}`}>
+      <button className="bookmark-list-place" onClick={() => onFocus(bookmark)} aria-label={`${bookmark.title}${mapAvailable && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng) ? 'を地図で表示' : 'の詳細を表示'}`}>
         <span className={`bookmark-category-symbol bookmark-${bookmarkCategory(bookmark.category).id}`}>{bookmarkCategory(bookmark.category).symbol}</span>
         <span><strong>{bookmark.title}</strong><small>{bookmark.location || bookmarkCategory(bookmark.category).label}</small></span>
-        {mapAvailable ? <MapPin size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
+        {mapAvailable && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng)
+          ? <MapPin size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
       </button>
       <div className="bookmark-list-actions"><button onClick={() => onEdit(bookmark)}>カテゴリ変更</button><button onClick={() => onRemove(bookmark)}>削除</button></div>
     </li>)}</ul> : <p className="bookmark-empty">{bookmarks.length ? '一致する候補がありません。' : '地図上の場所や検索結果から、行きたい場所を保存できます。'}</p>}
   </Modal>;
 }
 
-function FinishedTripLanding({ trips, showPastTrips, onShowPastTrips, onOpenTrip, onCreate, loading }) {
+function FinishedTripLanding({ trips, showPastTrips, onShowPastTrips, onOpenTrip, onCreate, loading, undo, redo, canUndo, canRedo }) {
   return <main className="finished-trip-screen">
-    <div className="finished-trip-brand"><span className="brand-mark"><Navigation size={19} fill="currentColor" /></span><strong>ROAM</strong></div>
+    <div className="finished-trip-brand"><span className="brand-mark"><Navigation size={19} fill="currentColor" /></span><strong>ROAM</strong>
+      {(canUndo || canRedo) && <div className="finished-trip-history">
+        <button onClick={undo} disabled={!canUndo} aria-label="元に戻す" title="元に戻す"><Undo2 size={19} /></button>
+        <button onClick={redo} disabled={!canRedo} aria-label="やり直す" title="やり直す"><Redo2 size={19} /></button>
+      </div>}
+    </div>
     <section className="finished-trip-content">
       {loading ? <p className="finished-trip-loading" role="status"><LoaderCircle size={22} className="offline-save-spinner" /> 旅行を読み込んでいます…</p>
         : showPastTrips ? <>
@@ -1288,7 +1332,7 @@ function FinishedTripLanding({ trips, showPastTrips, onShowPastTrips, onOpenTrip
 
 function App() {
   const initialTrips = useMemo(() => migrateTrips(), []);
-  const { trips, setTrips, syncStatus } = useSharedWorkspace(initialTrips);
+  const { trips, setTrips, undo, redo, canUndo, canRedo, syncStatus } = useSharedWorkspace(initialTrips);
   const online = useOnlineStatus();
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
@@ -1368,13 +1412,22 @@ function App() {
   const mapPick = useCallback((place) => setModal({ type: 'placeChoice', place }), []);
   const addBookmarkToPlan = useCallback((bookmark) => setModal({
     type: 'activity', dayId: day?.id,
-    activity: { time: '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords, notes: '' },
+    activity: { time: bookmark.time || '10:00', title: bookmark.title, location: bookmark.location, coords: bookmark.coords,
+      notes: bookmark.notes || '', images: bookmark.images || [], travelMode: bookmark.travelMode || 'DRIVING' },
   }), [day?.id]);
   const editBookmark = useCallback((bookmark) => setModal({ type: 'placeChoice', place: bookmark }), []);
   const saveBookmark = (place, category) => {
     const existing = findMatchingBookmark(bookmarks, place);
     const newId = uid();
     updateTrip((current) => saveTripBookmark(current, place, category, newId));
+    setMapFocus({ bookmarkId: existing?.id || newId, requestId: uid() });
+    if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
+    setModal(null);
+  };
+  const movePlanToBookmark = (place, category, source) => {
+    const existing = findMatchingBookmark(bookmarks, place);
+    const newId = uid();
+    updateTrip((current) => moveActivityToBookmark(current, source.dayId, place, category, newId));
     setMapFocus({ bookmarkId: existing?.id || newId, requestId: uid() });
     if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
     setModal(null);
@@ -1414,7 +1467,8 @@ function App() {
 
   if (!trip) return <>
     <FinishedTripLanding trips={sortedTrips} showPastTrips={showPastTrips} onShowPastTrips={setShowPastTrips}
-      onOpenTrip={selectTrip} onCreate={() => setModal({ type: 'trip' })} loading={online && syncStatus === 'loading'} />
+      onOpenTrip={selectTrip} onCreate={() => setModal({ type: 'trip' })} loading={online && syncStatus === 'loading'}
+      undo={() => { autoSelectOnLoad.current = true; undo(); }} redo={redo} canUndo={canUndo} canRedo={canRedo} />
     {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
   </>;
   if (!day) return <div className="empty-app"><button className="primary-button" onClick={() => setTrips(seedTrips)}>旅行データを復元</button></div>;
@@ -1438,6 +1492,8 @@ function App() {
             {railOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
           <div className="trip-heading"><span className="eyebrow">{dateRange(trip)}</span><h1>{trip.title}</h1><p>{trip.subtitle}</p></div>
+          <button className="icon-button history-button" onClick={undo} disabled={!canUndo} aria-label="元に戻す" title="元に戻す"><Undo2 size={19} /></button>
+          <button className="icon-button history-button" onClick={redo} disabled={!canRedo} aria-label="やり直す" title="やり直す"><Redo2 size={19} /></button>
           <button className="icon-button notebook-toggle" onClick={() => setReader({ trip })} aria-label="旅行ノートを開く" title="旅行ノート"><StickyNote size={20} /></button>
           <button className={`icon-button offline-save-button ${offlineComplete ? 'is-saved' : offlinePartial ? 'is-partial' : ''}`}
             onClick={saveCurrentTripOffline} disabled={!online || offlineSave.status === 'saving'}
@@ -1469,7 +1525,7 @@ function App() {
           {offlineSave.message}
         </div>}
       </section>
-      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} onAdd={() => setModal({ type: 'activity', dayId: day.id })} onEdit={(activity) => setModal({ type: 'activity', dayId: day.id, activity })} onDelete={(id) => {
+      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} onAdd={() => setModal({ type: 'activity', dayId: day.id })} onEdit={(activity) => setModal({ type: 'activity', dayId: day.id, activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={openGuide}
@@ -1484,11 +1540,12 @@ function App() {
       }} />
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'placeChoice' && <PlaceActionModal key={modal.place.id || modal.place.placeId || `${modal.place.coords?.lat},${modal.place.coords?.lng}`}
-        place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} onClose={() => setModal(null)}
-        onAddToPlan={() => addBookmarkToPlan(modal.place)} onSaveBookmark={(category) => saveBookmark(modal.place, category)} />}
+        place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} movingFromPlan={Boolean(modal.source)} onClose={() => setModal(null)}
+        onAddToPlan={() => addBookmarkToPlan(modal.place)} onSaveBookmark={(category) => modal.source
+          ? movePlanToBookmark(modal.place, category, modal.source) : saveBookmark(modal.place, category)} />}
       {modal?.type === 'bookmarkList' && <BookmarkListModal trip={trip} mapAvailable={online && Boolean(apiKey)} onClose={() => setModal(null)}
         onFocus={(bookmark) => {
-          if (online && apiKey) {
+          if (online && apiKey && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng)) {
             setMapFocus({ bookmarkId: bookmark.id, requestId: uid() });
             if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
             setModal(null);
@@ -1499,7 +1556,9 @@ function App() {
         <div className="modal-actions"><button className="secondary-button" onClick={() => setModal({ type: 'bookmarkList' })}>キャンセル</button>
           <button className="delete-confirm-button" onClick={() => { updateTrip((current) => removeTripBookmark(current, modal.bookmark.id)); setModal({ type: 'bookmarkList' }); }}>削除する</button></div>
       </Modal>}
-      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity} onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
+      {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity}
+        onMoveToBookmark={(activity) => setModal({ type: 'placeChoice', place: activity, source: { dayId: modal.dayId } })}
+        onClose={() => setModal(null)} apiKey={apiKey} tripId={trip.id} />}
       {modal?.type === 'confirmActivityDelete' && <Modal title="予定を削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.activity.title}」を旅程から削除しますか？</p>
         <div className="modal-actions">

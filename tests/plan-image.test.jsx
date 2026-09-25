@@ -73,3 +73,16 @@ it('coalesces resume events and ignores a late response for an old photo', async
   expect(thumbnail.querySelector('img').src).toBe('blob:offline-photo');
   expect(URL.revokeObjectURL).not.toHaveBeenCalled();
 });
+
+it('retries immediately after an offline cache lookup when the connection returns', async () => {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+  let finishOfflineLookup;
+  offlineAttachmentBlob.mockImplementationOnce(() => new Promise((resolve) => { finishOfflineLookup = resolve; }));
+  render(<PlanImage image="trip/photo" />);
+  expect(offlineAttachmentBlob).toHaveBeenCalledTimes(1);
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+  fireEvent.online(window);
+  await act(async () => { finishOfflineLookup(null); });
+  expect(attachmentUrl).toHaveBeenCalledWith('trip/photo');
+  expect(screen.getByRole('img', { name: '予定の写真' }).src).toBe('https://example.com/photo.jpg');
+});

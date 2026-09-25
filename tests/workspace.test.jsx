@@ -71,6 +71,37 @@ it('does not write merely because a cloud workspace was loaded', async () => {
   expect(saveSharedWorkspace).not.toHaveBeenCalled();
 });
 
+it('undoes and redoes user edits without treating cloud hydration as an edit', async () => {
+  const { result } = await mount();
+  expect(result.current.canUndo).toBe(false);
+  act(() => result.current.setTrips((current) => [...current, { id: 'added' }]));
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['remote', 'added']);
+  expect(result.current.canUndo).toBe(true);
+  act(() => result.current.undo());
+  expect(result.current.trips).toEqual(remote.trips);
+  expect(result.current.canRedo).toBe(true);
+  act(() => result.current.redo());
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['remote', 'added']);
+  act(() => result.current.undo());
+  act(() => result.current.setTrips((current) => [...current, { id: 'other' }]));
+  expect(result.current.canRedo).toBe(false);
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(saveSharedWorkspace).toHaveBeenCalledWith({ trips: [{ id: 'remote' }, { id: 'other' }], revision: 4 });
+});
+
+it('keeps quick successive edits in separate undo steps', async () => {
+  const { result } = await mount();
+  act(() => {
+    result.current.setTrips((current) => [...current, { id: 'first' }]);
+    result.current.setTrips((current) => [...current, { id: 'second' }]);
+  });
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['remote', 'first', 'second']);
+  act(() => result.current.undo());
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['remote', 'first']);
+  act(() => result.current.undo());
+  expect(result.current.trips.map((trip) => trip.id)).toEqual(['remote']);
+});
+
 it('reports completed saves after Strict Mode remounts effects', async () => {
   const { result } = await mount({ wrapper: ({ children }) => <React.StrictMode>{children}</React.StrictMode> });
   act(() => result.current.setTrips([{ id: 'edited' }]));

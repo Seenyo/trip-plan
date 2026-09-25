@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findMatchingBookmark, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
+import { BOOKMARK_CATEGORIES, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
 
 const place = { placeId: 'google-place-1', title: '  Café  ', location: 'Main Street', coords: { lat: 64.1, lng: -21.9 } };
 
@@ -19,5 +19,19 @@ describe('trip bookmarks', () => {
     expect(findMatchingBookmark(trip.bookmarks, { placeId: place.placeId })).toMatchObject({ id: 'first' });
     expect(removeTripBookmark(trip, 'first').bookmarks).toEqual([]);
     expect(trip.bookmarks).toHaveLength(1);
+  });
+
+  it('offers supermarket and heritage categories and moves a located plan without losing its details', () => {
+    expect(BOOKMARK_CATEGORIES.map(({ label }) => label)).toContain('スーパー');
+    expect(BOOKMARK_CATEGORIES.map(({ label }) => label)).toContain('遺跡');
+    const activity = { id: 'stop-1', title: '古い教会', location: 'アイスランド', coords: { lat: 64, lng: -21 },
+      time: '11:00', notes: '入口を確認', images: [{ path: 'trip/photo' }], travelMode: 'WALKING' };
+    const trip = { id: 'iceland', days: [{ id: 'day-1', activities: [activity, { id: 'stop-2' }] }] };
+    const moved = moveActivityToBookmark(trip, 'day-1', activity, 'heritage', 'bookmark-1');
+    expect(moved.days[0].activities.map(({ id }) => id)).toEqual(['stop-2']);
+    expect(moved.bookmarks[0]).toMatchObject({ title: '古い教会', category: 'heritage', notes: '入口を確認',
+      images: [{ path: 'trip/photo' }], time: '11:00', travelMode: 'WALKING' });
+    expect(trip.days[0].activities).toHaveLength(2);
+    expect(moveActivityToBookmark(trip, 'day-1', { ...activity, coords: null }, 'heritage', 'bookmark-2').bookmarks[0].coords).toBeNull();
   });
 });

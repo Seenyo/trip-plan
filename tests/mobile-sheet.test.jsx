@@ -63,9 +63,11 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
 
   // Native horizontal scrolling of the date strip must not change the day.
   const selectedDate = mobileDays.querySelector('[aria-selected="true"]').textContent;
-  fireEvent.touchStart(mobileDays, { changedTouches: [{ clientX: 250, clientY: 60 }] });
+  fireEvent.touchStart(mobileDays, { touches: [{ clientX: 250, clientY: 60 }], changedTouches: [{ clientX: 250, clientY: 60 }] });
+  fireEvent.touchMove(mobileDays, { touches: [{ clientX: 80, clientY: 60 }] });
   fireEvent.touchEnd(mobileDays, { changedTouches: [{ clientX: 80, clientY: 60 }] });
   expect(mobileDays.querySelector('[aria-selected="true"]').textContent).toBe(selectedDate);
+  expect(mobileDays.querySelector('.day-strip').scrollLeft).toBe(170);
 
   sheet.scrollTop = 0;
   fireEvent.touchStart(sheet, { changedTouches: [{ clientX: 200, clientY: 360 }] });
