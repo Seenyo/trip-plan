@@ -59,6 +59,7 @@ import PlanImage from './PlanImage';
 import PlacePhotos from './GooglePlacePhotos';
 import StopGooglePhoto from './StopGooglePhoto';
 import { icelandSpotMeta } from './icelandSpots';
+import { itineraryPhotoQuery } from './itineraryPhotoQuery';
 import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
@@ -223,7 +224,7 @@ function MapDetailCard({ selection, tripId, travelTime, bookmarkCategories, onCl
       </div>}
       {activity.location && <p>{activity.location}</p>}
     </div>
-    <PlacePhotos item={activity} query={spotMeta?.photoQuery} />
+    <PlacePhotos item={activity} query={itineraryPhotoQuery(activity, tripId)} />
   </article>;
 }
 
@@ -801,6 +802,7 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
 
 function SortableStop({ item, tripId, index, count, travelTime, onEdit, onDelete, onGuide, onSelect }) {
   const spotMeta = icelandSpotMeta(item, tripId);
+  const photoQuery = itineraryPhotoQuery(item, tripId);
   const {
     attributes,
     listeners,
@@ -849,7 +851,7 @@ function SortableStop({ item, tripId, index, count, travelTime, onEdit, onDelete
         {spotMeta && <span className="spot-local-name">{spotMeta.kana === item.title ? spotMeta.localName : `${spotMeta.kana}（${spotMeta.localName}）`}</span>}
         <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
         {item.notes && <small>{item.notes}</small>}
-        {spotMeta?.photoQuery && <StopGooglePhoto item={item} photoQuery={spotMeta.photoQuery} />}
+        {photoQuery && <StopGooglePhoto item={item} photoQuery={photoQuery} />}
         {item.images?.length > 0 && <div className="stop-images" aria-label={`${item.title}の写真`}>
           {item.images.map((image, imageIndex) => <PlanImage key={image.id || image.path || imageIndex} image={image} expandable />)}
         </div>}
