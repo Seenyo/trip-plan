@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Trip App · フォント比較</title>
+    <link rel="icon" type="image/svg+xml" href="./trip-app-icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Noto+Sans+JP:wght@400;500;700;800&family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <style>
+      :root { color: #303841; background: #edf1ef; font-family: 'Noto Sans JP', sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      .page { max-width: 1220px; margin: auto; padding: 32px clamp(16px, 3vw, 40px) 48px; }
+      .page-head { display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+      .page-head h1 { margin: 0 0 8px; font-size: clamp(23px, 3vw, 34px); line-height: 1.35; letter-spacing: -.035em; }
+      .page-head p { margin: 0; max-width: 650px; color: #647178; font-size: 13px; line-height: 1.7; }
+      .page-head img { width: 52px; height: 52px; border-radius: 15px; }
+      .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+      .option { min-width: 0; padding: 15px; border: 1px solid #d9e1de; border-radius: 20px; background: #fff; }
+      .option.zen { font-family: 'Zen Maru Gothic', sans-serif; }
+      .option.rounded { font-family: 'M PLUS Rounded 1c', sans-serif; }
+      .option.noto { font-family: 'Noto Sans JP', sans-serif; }
+      .option-head { min-height: 92px; padding: 3px 5px 13px; }
+      .option-head h2 { margin: 0 0 5px; font-size: 16px; line-height: 1.4; }
+      .option-head p { margin: 0 0 5px; color: #52636b; font-size: 11px; line-height: 1.5; }
+      .option-head small { color: #819097; font-size: 10px; }
+      .phone { position: relative; width: 100%; height: 650px; overflow: hidden; border: 1px solid #cfd7d5; border-radius: 25px; background: #f5f5f5; box-shadow: 0 8px 24px #25384112; color: #303841; }
+      .phone.zen { font-family: 'Zen Maru Gothic', sans-serif; }
+      .phone.rounded { font-family: 'M PLUS Rounded 1c', sans-serif; }
+      .phone.noto { font-family: 'Noto Sans JP', sans-serif; }
+      .phone-top { position: absolute; z-index: 2; inset: 0 0 auto; height: 92px; padding: 19px 16px 10px; background: linear-gradient(#f5f5f5 72%, #f5f5f500); }
+      .phone-title { display: flex; align-items: start; justify-content: space-between; gap: 9px; }
+      .phone-title-copy { min-width: 0; text-align: center; }
+      .phone-title-copy small { display: block; color: #f05020; font-size: 9px; font-weight: 700; }
+      .phone-title-copy strong { display: block; margin-top: 3px; font-size: 16px; line-height: 1.2; white-space: nowrap; letter-spacing: -.04em; }
+      .phone-title-copy em { display: block; margin-top: 3px; color: #758087; font-size: 8px; font-style: normal; }
+      .icon-button { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #d9dfdf; border-radius: 10px; background: #fff; font-size: 19px; line-height: 1; }
+      .map { position: absolute; inset: 0 0 265px; overflow: hidden; background: #e5ece4; }
+      .map::before { content: ''; position: absolute; inset: -25px; transform: rotate(-18deg); background: linear-gradient(145deg, transparent 40%, #d9e9da 40% 65%, transparent 65%), repeating-linear-gradient(90deg, transparent 0 27px, #fff9 28px 29px, transparent 30px 47px), repeating-linear-gradient(0deg, transparent 0 35px, #fff9 36px 37px, transparent 38px 66px); }
+      .water { position: absolute; top: 124px; right: -82px; width: 235px; height: 270px; transform: rotate(-22deg); border-radius: 49% 28% 45% 35%; background: #abd8e8; }
+      .map svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .map-path-back { fill: none; stroke: #30384180; stroke-width: 9; stroke-linecap: round; }
+      .map-path-one, .map-path-two { fill: none; stroke-width: 5; stroke-linecap: round; }
+      .map-path-one { stroke: #ffad42; }.map-path-two { stroke: #71c3c9; }
+      .map-label { position: absolute; top: 159px; left: 18px; color: #63717b; font-size: 11px; font-weight: 700; text-shadow: 0 1px white; }
+      .pin { position: absolute; z-index: 1; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #fff; box-shadow: 0 3px 9px #23384142; font-size: 11px; font-weight: 800; }
+      .pin-one { top: 220px; left: 35%; color: #ffad42; }.pin-two { top: 278px; left: 62%; color: #71c3c9; }
+      .map-search { position: absolute; z-index: 2; top: 100px; left: 50%; width: 80%; padding: 9px 12px; transform: translateX(-50%); border: 1px solid #d8dfdc; border-radius: 12px; background: #fffffff2; box-shadow: 0 4px 12px #2538411a; color: #889297; font-size: 9px; font-weight: 500; }
+      .map-search b { margin-right: 7px; color: #303841; font-size: 13px; }
+      .sheet { position: absolute; inset: auto 0 0; height: 348px; padding: 0 14px; border-radius: 20px 20px 0 0; background: #f5f5f5; box-shadow: 0 -9px 26px #25384119; }
+      .handle { width: 34px; height: 4px; margin: 9px auto 11px; border-radius: 4px; background: #b7c0c2; }
+      .days { display: flex; gap: 5px; margin: 0 -4px 13px; }
+      .days span { flex: 1; min-width: 0; padding: 6px 1px; border: 1px solid #dfe4e2; border-radius: 8px; background: #fff; color: #617078; text-align: center; font-size: 8px; font-weight: 700; }
+      .days .active { border-color: #76abae; color: #fff; background: #76abae; }
+      .days b { display: block; margin-top: 2px; font-size: 9px; }
+      .sheet-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+      .sheet-head small { color: #f05020; font-size: 9px; font-weight: 700; }
+      .sheet-head h3 { margin: 3px 0 3px; font-size: 17px; line-height: 1.3; letter-spacing: -.045em; }
+      .sheet-head p { margin: 0; color: #69767c; font-size: 9px; line-height: 1.45; }
+      .sheet-head .edit { width: 29px; height: 29px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #e1e5e3; border-radius: 9px; background: #fff; color: #5c6970; font-size: 13px; }
+      .stop { display: grid; grid-template-columns: 34px 25px minmax(0, 1fr); gap: 5px; padding-top: 17px; }
+      .stop-time { padding-top: 4px; color: #78868c; font-size: 9px; font-weight: 700; }
+      .track { position: relative; display: grid; justify-items: center; }
+      .track::after { content: ''; position: absolute; top: 21px; bottom: -24px; width: 3px; background: #71c3c9; }
+      .stop:last-child .track::after { display: none; }
+      .track span { position: relative; z-index: 1; width: 21px; height: 21px; display: grid; place-items: center; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px #30384119; color: #ffad42; font-size: 9px; font-weight: 800; }
+      .stop:last-child .track span { color: #71c3c9; }
+      .stop-copy { min-width: 0; padding-bottom: 13px; border-bottom: 1px solid #e2e7e4; }
+      .stop-copy .travel { display: inline-block; padding: 4px 7px; border-radius: 6px; background: #fff0d8; color: #745226; font-size: 8px; font-weight: 700; }
+      .stop-copy h4 { margin: 5px 0 2px; font-size: 13px; line-height: 1.35; letter-spacing: -.035em; }
+      .stop-copy p { margin: 0; color: #77848a; font-size: 8px; line-height: 1.4; }
+      .stop-copy .guide { display: inline-block; margin-top: 6px; color: #5e7779; font-size: 8px; font-weight: 700; }
+      @media (max-width: 980px) { .options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 650px) { .page { padding: 22px 12px 38px; } .options { grid-template-columns: 1fr; gap: 14px; } .option { max-width: 430px; width: 100%; margin: auto; } .page-head { padding: 0 5px; } }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="page-head">
+        <div><h1>Trip App のフォントを比べる</h1><p>同じ旅程画面を3種類の日本語フォントで並べました。文字の印象、地名の読みやすさ、スマホでの情報量を比較できます。これは比較用モックで、アプリ本体のフォントはまだ変えていません。</p></div>
+        <img src="./trip-app-icon.svg" alt="Trip App" />
+      </header>
+      <main class="options" id="options"></main>
+    </div>
+    <template id="phone-template">
+      <div class="phone">
+        <div class="map" aria-hidden="true">
+          <div class="water"></div>
+          <svg viewBox="0 0 360 390" preserveAspectRatio="none"><path class="map-path-back" d="M10 250 C90 215 98 265 162 240 S260 270 340 298"/><path class="map-path-one" d="M10 250 C90 215 98 265 162 240"/><path class="map-path-two" d="M162 240 C225 215 260 270 340 298"/></svg>
+          <div class="map-label">アイスランド南東部</div><div class="pin pin-one">1</div><div class="pin pin-two">2</div>
+        </div>
+        <div class="phone-top"><div class="phone-title"><span class="icon-button">☰</span><div class="phone-title-copy"><small>2026年10月5日 – 10月17日</small><strong>アイスランド・リングロード</strong><em>火山、氷河、滝、温泉を巡る13日間</em></div><span class="icon-button">▤</span></div></div>
+        <div class="map-search"><b>⌕</b>場所を検索、または住所を貼り付け</div>
+        <div class="sheet"><div class="handle"></div><div class="days"><span>3日目<b>7日(水)</b></span><span class="active">4日目<b>8日(木)</b></span><span>5日目<b>9日(金)</b></span><span>6日目<b>10日(土)</b></span></div><div class="sheet-head"><div><small>4日目 · 10月8日(木)</small><h3>カトラ火山＆ダイヤモンドビーチ</h3><p>午前は火山体験ツアー。午後は氷河エリアへ。</p></div><span class="edit">✎</span></div><div class="stop"><div class="stop-time">10:00</div><div class="track"><span>1</span></div><div class="stop-copy"><span class="travel">車で14分 · 16 km</span><h4>スコゥガフォス</h4><p>滝の右側の階段から展望台へ</p><span class="guide">▤ 地点ガイド</span></div></div><div class="stop"><div class="stop-time">12:30</div><div class="track"><span>2</span></div><div class="stop-copy"><span class="travel">車で36分 · 34 km</span><h4>ディルホゥラエイ</h4><p>海を見渡せる岬。風の強さに注意</p><span class="guide">▤ 地点ガイド</span></div></div></div>
+      </div>
+    </template>
+    <script>
+      const variants = [
+        { className: 'zen', title: 'やわらかい', font: 'Zen Maru Gothic', description: '丸みがありつつ、長い地名や説明文も読みやすい。' },
+        { className: 'rounded', title: '親しみやすい', font: 'M PLUS Rounded 1c', description: '少し元気な丸ゴシック。予定の見出しが明るく見える。' },
+        { className: 'noto', title: 'すっきり', font: 'Noto Sans JP', description: '情報が多い画面でも落ち着いて読める。' },
+      ];
+      const template = document.getElementById('phone-template');
+      const container = document.getElementById('options');
+      variants.forEach((variant) => {
+        const section = document.createElement('section');
+        section.className = `option ${variant.className}`;
+        const heading = document.createElement('header');
+        heading.className = 'option-head';
+        const title = document.createElement('h2');
+        title.textContent = variant.title;
+        const description = document.createElement('p');
+        description.textContent = variant.description;
+        const font = document.createElement('small');
+        font.textContent = variant.font;
+        heading.append(title, description, font);
+        const phone = template.content.firstElementChild.cloneNode(true);
+        phone.classList.add(variant.className);
+        section.append(heading, phone);
+        container.append(section);
+      });
+    </script>
+  </body>
+</html>

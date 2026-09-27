@@ -122,12 +122,11 @@ describe('itinerary helpers', () => {
     ]);
   });
 
-  it('uses one route color by default and point colors when enabled', () => {
+  it('uses point colors for each route and cycles through the palette', () => {
     expect(routeColorForIndex(0)).toBe('#ffad42');
-    expect(routeColorForIndex(4)).toBe('#ffad42');
-    expect(routeColorForIndex(0, true)).toBe('#ffad42');
-    expect(routeColorForIndex(1, true)).toBe('#71c3c9');
-    expect(routeColorForIndex(8, true)).toBe('#ffad42');
+    expect(routeColorForIndex(1)).toBe('#71c3c9');
+    expect(routeColorForIndex(4)).toBe('#75aee0');
+    expect(routeColorForIndex(8)).toBe('#ffad42');
     expect(routeTextColor(routeColorForIndex(0))).toBe('#303841');
   });
 
