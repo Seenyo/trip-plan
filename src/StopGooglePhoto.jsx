@@ -46,13 +46,10 @@ export default function StopGooglePhoto({ item, photoQuery }) {
   }, [item.id, item.placeId, item.coords?.lat, item.coords?.lng, photoQuery, visible, ready]);
 
   return <div ref={node} className="stop-google-photo-anchor">
-    {photo && <div className="stop-google-photo">
-      <button type="button" className="stop-google-photo-image" onClick={(event) => { event.stopPropagation(); setExpanded(true); }}
-        aria-label={`${item.title}のGoogle マップの写真を拡大`}>
-        <img src={photo.url} alt={`${item.title}の写真`} loading="lazy" decoding="async" />
-      </button>
-      <PhotoCredit photo={photo} />
-    </div>}
+    {photo && <button type="button" className="stop-google-photo-image" onClick={(event) => { event.stopPropagation(); setExpanded(true); }}
+      aria-label={`${item.title}のGoogle マップの写真を拡大`}>
+      <img src={photo.url} alt={`${item.title}の写真`} loading="lazy" decoding="async" />
+    </button>}
     {expanded && photo && <ImageViewer src={photo.fullUrl || photo.url} alt={`${item.title}の写真`}
       onClose={() => setExpanded(false)} footer={<PhotoCredit photo={photo} />} />}
   </div>;

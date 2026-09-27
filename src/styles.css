@@ -201,12 +201,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .map-detail-copy .spot-local-name { font-size: 9px; }
 .stop-copy p { margin: 7px 0 5px; color: var(--slate); font-size: 9px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
 .stop-copy small { color: var(--muted); font-size: 9px; line-height: 1.45; }
-.stop-google-photo { width: fit-content; max-width: 100%; min-height: 72px; margin-top: 10px; padding: 4px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 11px; background: white; }
-.stop-google-photo-image { width: 72px; height: 72px; flex: 0 0 72px; display: block; padding: 0; overflow: hidden; border: 0; border-radius: 8px; background: var(--soft); cursor: zoom-in; }
+.stop-google-photo-image { width: 72px; height: 72px; margin-top: 10px; display: block; padding: 0; overflow: hidden; border: 0; border-radius: 8px; background: var(--soft); cursor: zoom-in; }
 .stop-google-photo-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.stop-google-photo .map-place-photo-credit { position: static; min-width: 0; max-width: 150px; padding: 0 5px 0 0; gap: 5px; color: var(--muted); background: none; font-size: 8px; line-height: 1.3; pointer-events: auto; }
-.stop-google-photo .map-place-photo-credit a { color: var(--muted); }
-.stop-google-photo .map-place-photo-source { align-self: flex-start; }
 .stop-images { max-width: 100%; height: 58px; margin-top: 10px; display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; }
 .stop-images img, .stop-images .plan-image-placeholder { width: 58px; height: 58px; flex: 0 0 auto; display: block; border-radius: 9px; object-fit: cover; background: var(--soft); }
 .stop-actions { display: flex; opacity: 0; transition: opacity .2s; }
