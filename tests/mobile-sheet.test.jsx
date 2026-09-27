@@ -81,6 +81,14 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   fireEvent.click(nextDate, { detail: 1 });
   expect(nextDate.getAttribute('aria-selected')).toBe('true');
   expect(strip.scrollTo).toHaveBeenCalledWith({ left: 252.5, behavior: 'smooth' });
+  // A date chosen while wide must recenter when the hidden strip appears on mobile.
+  Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 0 });
+  strip.scrollTo.mockClear();
+  fireEvent.resize(window);
+  expect(strip.scrollTo).not.toHaveBeenCalled();
+  Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+  fireEvent.resize(window);
+  expect(strip.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
   fireEvent.click(firstDate, { detail: 0 });
 
   sheet.scrollTop = 0;
