@@ -57,6 +57,8 @@ import './styles.css';
 import PlaceSearch from './PlaceSearch';
 import PlanImage from './PlanImage';
 import PlacePhotos from './GooglePlacePhotos';
+import StopGooglePhoto from './StopGooglePhoto';
+import { icelandSpotMeta } from './icelandSpots';
 import './offline';
 import './travelReader.css';
 import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
@@ -157,7 +159,7 @@ function createStopMarker(maps, map, item, number, color, onClick) {
   });
 }
 
-function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
+function MapDetailCard({ selection, tripId, travelTime, bookmarkCategories, onClose, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   if (!selection) return null;
   if (selection.type === 'bonus') {
     const store = selection.item;
@@ -206,11 +208,13 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
   }
   const activity = selection.item;
   const firstImage = activity.images?.[0];
+  const spotMeta = icelandSpotMeta(activity, tripId);
   return <article className={`map-detail-card activity-detail-card ${firstImage ? 'has-image' : ''}`} aria-live="polite">
     <button className="map-detail-close" onClick={onClose} aria-label="詳細を閉じる"><X size={16} /></button>
     <button className="map-detail-guide" onClick={() => onGuide(activity)} aria-label={`${activity.title}の地点ガイドを開く`} title="地点ガイド"><BookOpen size={17} /></button>
     {firstImage && <PlanImage image={firstImage} className="map-detail-image" eager expandable />}
     <div className="map-detail-copy"><small>{activity.time || '時間未定'}</small><h2>{activity.title}</h2>
+      {spotMeta && <span className="spot-local-name">{spotMeta.kana === activity.title ? spotMeta.localName : `${spotMeta.kana}（${spotMeta.localName}）`}</span>}
       {travelTime && <div className={`travel-time map-travel-time ${travelTime.travelMode === 'WALKING' ? 'is-walking' : 'is-driving'} ${travelTime.unavailable ? 'is-unavailable' : ''}`}>
         <strong>{travelTime.unavailable
           ? `${travelTime.travelMode === 'WALKING' ? '徒歩' : '車'}のルートなし`
@@ -219,11 +223,11 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
       </div>}
       {activity.location && <p>{activity.location}</p>}
     </div>
-    <PlacePhotos item={activity} />
+    <PlacePhotos item={activity} query={spotMeta?.photoQuery} />
   </article>;
 }
 
-const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, bookmarkCategories, onMapPick, onTravelTimesChange, travelTimes, showBonus, showChargers, focusRequest, offline, compactViewport, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
+const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousDay, bookmarks, bookmarkCategories, onMapPick, onTravelTimesChange, travelTimes, showBonus, showChargers, focusRequest, offline, compactViewport, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -723,7 +727,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
           );
         })}
         {accessCard()}
-        <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
+        <MapDetailCard selection={resolvedSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
           onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
       </div>
     );
@@ -741,7 +745,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
         {locationStatus === 'locating' ? <LoaderCircle className="location-spinner" size={19} /> : <LocateFixed size={19} />}
       </button>
       {locationStatus === 'error' && <span className="map-location-error">現在地を取得できません</span>}
-      <MapDetailCard selection={resolvedSelection} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
+      <MapDetailCard selection={resolvedSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
         onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
     </div>
   );
@@ -795,7 +799,8 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function SortableStop({ item, index, count, travelTime, onEdit, onDelete, onGuide, onSelect }) {
+function SortableStop({ item, tripId, index, count, travelTime, onEdit, onDelete, onGuide, onSelect }) {
+  const spotMeta = icelandSpotMeta(item, tripId);
   const {
     attributes,
     listeners,
@@ -841,8 +846,10 @@ function SortableStop({ item, index, count, travelTime, onEdit, onDelete, onGuid
             <button onClick={() => onDelete(item.id)} aria-label={`${item.title}を削除`}><Trash2 size={15} /></button>
           </div>
         </div>
+        {spotMeta && <span className="spot-local-name">{spotMeta.kana === item.title ? spotMeta.localName : `${spotMeta.kana}（${spotMeta.localName}）`}</span>}
         <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
         {item.notes && <small>{item.notes}</small>}
+        {spotMeta?.photoQuery && <StopGooglePhoto item={item} photoQuery={spotMeta.photoQuery} />}
         {item.images?.length > 0 && <div className="stop-images" aria-label={`${item.title}の写真`}>
           {item.images.map((image, imageIndex) => <PlanImage key={image.id || image.path || imageIndex} image={image} expandable />)}
         </div>}
@@ -852,8 +859,9 @@ function SortableStop({ item, index, count, travelTime, onEdit, onDelete, onGuid
   );
 }
 
-function PreviousDayStop({ item, onGuide, onSelect }) {
+function PreviousDayStop({ item, tripId, onGuide, onSelect }) {
   const color = routeColorForIndex(0);
+  const spotMeta = icelandSpotMeta(item, tripId);
   return <article className="stop previous-day-stop">
     <div className="stop-time"><span>前日</span><strong>{item.time || '時間未定'}</strong></div>
     <div className="stop-track">
@@ -870,13 +878,14 @@ function PreviousDayStop({ item, onGuide, onSelect }) {
       }}>
       <span className="previous-day-label">前日の最終地点</span>
       <div className="stop-heading"><h3>{item.title}</h3></div>
+      {spotMeta && <span className="spot-local-name">{spotMeta.kana === item.title ? spotMeta.localName : `${spotMeta.kana}（${spotMeta.localName}）`}</span>}
       <p><MapPin size={13} /> {item.location || '場所未設定'}</p>
       <button className="guide-entry" onClick={() => onGuide(item)}><BookOpen size={14} />地点ガイド</button>
     </div>
   </article>;
 }
 
-function Timeline({ day, previousDay, travelTimes, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
+function Timeline({ day, previousDay, tripId, travelTimes, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -897,7 +906,7 @@ function Timeline({ day, previousDay, travelTimes, onEdit, onDelete, onAdd, onRe
       autoScroll={{ canScroll: (element) => element.classList.contains('itinerary-sheet') }}
       onDragStart={({ active }) => setActiveId(active.id)} onDragCancel={() => setActiveId(null)} onDragEnd={finishDrag}>
       <div className="timeline">
-        {previousActivity && <PreviousDayStop item={previousActivity}
+        {previousActivity && <PreviousDayStop item={previousActivity} tripId={tripId}
           onGuide={onGuide} onSelect={onSelect} />}
         {day.activities.length === 0 ? (
           <button className="empty-day" onClick={onAdd}>
@@ -906,7 +915,7 @@ function Timeline({ day, previousDay, travelTimes, onEdit, onDelete, onAdd, onRe
             <small>最初の場所や予定を追加してください。</small>
           </button>
         ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-          {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
+          {day.activities.map((item, index) => <SortableStop key={item.id} item={item} tripId={tripId} index={index}
             count={day.activities.length} travelTime={travelTimes[item.id]}
             onEdit={onEdit} onDelete={onDelete} onGuide={onGuide} onSelect={onSelect} />)}
         </SortableContext>}
@@ -1025,7 +1034,7 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, dayIndex, setDayI
         <span>{dayIndex + 1} / {trip.days.length}</span>
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
-      <Timeline day={day} previousDay={previousDay} travelTimes={travelTimes}
+      <Timeline day={day} previousDay={previousDay} tripId={trip.id} travelTimes={travelTimes}
         onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} onSelect={onSelect} />
     </section>
   );
@@ -1557,7 +1566,7 @@ function App() {
           </button>
         </header>
         {online && <SearchBar apiKey={apiKey} onResult={mapPick} />}
-        <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} bookmarks={bookmarks} bookmarkCategories={bookmarkCategories} onMapPick={mapPick}
+        <GoogleMap apiKey={online ? apiKey : ''} tripId={trip.id} day={day} previousDay={trip.days[dayIndex - 1]} bookmarks={bookmarks} bookmarkCategories={bookmarkCategories} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
           showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
           compactViewport={sheetStage === 'half'}

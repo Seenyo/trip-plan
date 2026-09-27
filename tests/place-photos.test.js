@@ -23,6 +23,16 @@ describe('Google place photos', () => {
     expect(photos[12].getURI).not.toHaveBeenCalled();
   });
 
+  it('uses only the first Google photo for an itinerary thumbnail', async () => {
+    const first = photo('first');
+    const second = photo('second');
+    class Place { async fetchFields() { this.photos = [first, second]; } }
+    const result = await loadPlacePhotos({ importLibrary: async () => ({ Place }) }, { title: 'Kerið', placeId: 'kerid' }, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].googleMapsURI).toBe(first.googleMapsURI);
+    expect(second.getURI).not.toHaveBeenCalled();
+  });
+
   it('searches legacy stops by name and coordinates, rejecting distant matches', async () => {
     const near = { location: { lat: () => 64.0, lng: () => -21.0 }, photos: [photo('near')], fetchFields: vi.fn() };
     const far = { location: { lat: () => 65.0, lng: () => -21.0 }, photos: [photo('far')], fetchFields: vi.fn() };

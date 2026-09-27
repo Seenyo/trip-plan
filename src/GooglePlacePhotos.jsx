@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { loadPlacePhotos } from './placePhotos';
 import ImageViewer from './ImageViewer';
 
-function PhotoCredit({ photo }) {
+export function PhotoCredit({ photo }) {
   return <div className="map-place-photo-credit">
     <span className="map-place-photo-authors">{photo.authors.map((author, index) => author.uri
       ? <a key={`${author.uri}-${index}`} href={author.uri} target="_blank" rel="noopener noreferrer">{author.photoURI && <img src={author.photoURI} alt="" loading="lazy" />}<span>{author.name || '撮影者'}</span></a>
@@ -12,24 +12,24 @@ function PhotoCredit({ photo }) {
   </div>;
 }
 
-export default function PlacePhotos({ item, variant = 'card' }) {
+export default function PlacePhotos({ item, variant = 'card', query }) {
   const [result, setResult] = useState({ key: '', status: 'loading', photos: [] });
   const [retry, setRetry] = useState(0);
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const available = Boolean(navigator.onLine && window.google?.maps && (item?.placeId || item?.coords));
-  const key = `${item?.id || ''}\u0000${item?.placeId || ''}\u0000${item?.title || ''}\u0000${item?.coords?.lat ?? ''},${item?.coords?.lng ?? ''}`;
+  const key = `${item?.id || ''}\u0000${item?.placeId || ''}\u0000${query || item?.title || ''}\u0000${item?.coords?.lat ?? ''},${item?.coords?.lng ?? ''}`;
   const visibleResult = result.key === key ? result : { status: 'loading', photos: [] };
   useEffect(() => {
     let active = true;
     if (!available) return undefined;
     setResult({ key, status: 'loading', photos: [] });
-    loadPlacePhotos(window.google.maps, item).then((photos) => {
+    loadPlacePhotos(window.google.maps, query ? { ...item, title: query } : item).then((photos) => {
       if (active) setResult({ key, status: photos.length ? 'ready' : 'empty', photos });
     }).catch(() => {
       if (active) setResult({ key, status: 'error', photos: [] });
     });
     return () => { active = false; };
-  }, [available, key, retry]);
+  }, [available, key, query, retry]);
 
   if (!available) return null;
   return <div className={`map-place-photos ${variant === 'modal' ? 'is-modal' : ''}`} aria-label={`${item.title}のGoogle マップの写真`}>
