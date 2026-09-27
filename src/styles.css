@@ -317,8 +317,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .sheet-history-actions button:disabled { opacity: .38; }
   .sheet-handle { width: 38px; height: 4px; border-radius: 4px; background: rgba(48,56,65,.22); }
   .mobile-day-strip { display: block; margin: 0 -2px; padding-bottom: 8px; }
-  .day-strip { padding: 3px; }
-  .day-strip button { min-width: 65px; background: var(--soft); }
+  .mobile-day-strip .day-strip { padding: 3px max(3px, calc(50% - 32.5px)); }
+  .mobile-day-strip .day-strip button { min-width: 65px; flex: 0 0 65px; background: var(--soft); }
   .day-strip button.active { background: var(--sage); }
   .sheet-title-row { padding: 4px 1px 15px; }
   .sheet-title-row h2 { font-size: 24px; }.sheet-title-row p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -73,8 +73,22 @@ it('keeps mobile swipes and plan deletion under deliberate controls', async () =
   const [firstDate, nextDate] = mobileDays.querySelectorAll('[role="tab"]');
   fireEvent.touchStart(firstDate, { changedTouches: [{ clientX: 250, clientY: 60 }] });
   fireEvent.touchEnd(firstDate, { changedTouches: [{ clientX: 80, clientY: 60 }] });
+  const strip = mobileDays.querySelector('.day-strip');
+  Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+  strip.getBoundingClientRect = () => ({ left: 30 });
+  nextDate.getBoundingClientRect = () => ({ left: 230, width: 65 });
+  strip.scrollTo = vi.fn(({ left }) => { strip.scrollLeft = left; });
   fireEvent.click(nextDate, { detail: 1 });
   expect(nextDate.getAttribute('aria-selected')).toBe('true');
+  expect(strip.scrollTo).toHaveBeenCalledWith({ left: 252.5, behavior: 'smooth' });
+  // A date chosen while wide must recenter when the hidden strip appears on mobile.
+  Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 0 });
+  strip.scrollTo.mockClear();
+  fireEvent.resize(window);
+  expect(strip.scrollTo).not.toHaveBeenCalled();
+  Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+  fireEvent.resize(window);
+  expect(strip.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
   fireEvent.click(firstDate, { detail: 0 });
 
   sheet.scrollTop = 0;

@@ -961,6 +961,34 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, dayIndex, setDayI
   useEffect(() => {
     if (sheet.current) sheet.current.scrollTop = 0;
   }, [stage]);
+  useLayoutEffect(() => {
+    const strip = mobileDays.current?.querySelector('.day-strip');
+    if (!strip) return undefined;
+    const centerSelected = (behavior) => {
+      const selected = strip.querySelector('[aria-selected="true"]');
+      if (!selected || !strip.clientWidth) return;
+      const stripRect = strip.getBoundingClientRect();
+      const selectedRect = selected.getBoundingClientRect();
+      const left = strip.scrollLeft + selectedRect.left - stripRect.left
+        + selectedRect.width / 2 - strip.clientWidth / 2;
+      strip.scrollTo({ left, behavior });
+    };
+    centerSelected(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+    let lastWidth = strip.clientWidth;
+    const onResize = () => {
+      const width = strip.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      if (width) centerSelected('auto');
+    };
+    window.addEventListener('resize', onResize);
+    const observer = window.ResizeObserver ? new ResizeObserver(onResize) : null;
+    observer?.observe(strip);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      observer?.disconnect();
+    };
+  }, [dayIndex, trip.id]);
   const onTouchStart = (event) => {
     touch.current = null;
     suppressClickUntil.current = null;
