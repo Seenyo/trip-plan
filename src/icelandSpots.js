@@ -68,8 +68,17 @@ const spots = {
   'iceland-reykjavik-stay-two': ['Guesthouse Pavi（2泊目）', 'ゲストハウス・パヴィ', 'Guesthouse Pavi', 'Guesthouse Pavi'],
 };
 
+// The bundled itinerary predates edits made in the shared trip. Its Skaftafell
+// stop is also at a different coordinate from the shared trip's glacier lagoon.
+const bundledSpots = {
+  'iceland-reynisfjara': ['ブラックサンドビーチ', 'レイニスフィヤラ', 'Reynisfjara', 'Reynisfjara Black Sand Beach'],
+  'iceland-vatnajokull': ['ヴァトナヨークトル国立公園へ移動', 'ヴァトナヨークトル', 'Vatnajökull', 'Skaftafell Visitor Centre'],
+};
+
 export function icelandSpotMeta(item, tripId) {
   if (tripId !== 'iceland-ring-road-2026') return null;
-  const [expectedTitle, kana, localName, photoQuery] = spots[item?.id] || [];
+  const current = spots[item?.id];
+  const bundled = bundledSpots[item?.id];
+  const [expectedTitle, kana, localName, photoQuery] = (item?.title === current?.[0] ? current : bundled) || [];
   return item?.title === expectedTitle ? { kana, localName, photoQuery } : null;
 }
