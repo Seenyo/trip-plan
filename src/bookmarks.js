@@ -13,7 +13,7 @@ export const BOOKMARK_CATEGORIES = [
 export const CUSTOM_CATEGORY_COLORS = ['#4e9f9a', '#dc7350', '#7979b7', '#d19b44', '#599b68', '#cf7795'];
 
 export const bookmarkCategoriesForTrip = (trip) => [
-  ...BOOKMARK_CATEGORIES,
+  ...BOOKMARK_CATEGORIES.filter((item) => item.id === 'other' || !trip?.hiddenBookmarkCategories?.includes(item.id)),
   ...(Array.isArray(trip?.bookmarkCategories) ? trip.bookmarkCategories.filter((item) => (
     typeof item.id === 'string' && item.id.startsWith('custom-')
     && typeof item.label === 'string' && item.label.trim()
@@ -34,6 +34,20 @@ export function addBookmarkCategory(trip, label, color, id) {
   return {
     ...trip,
     bookmarkCategories: [...(trip.bookmarkCategories || []), { id, label: name, symbol: Array.from(name)[0], color }],
+  };
+}
+
+export function removeBookmarkCategory(trip, categoryId) {
+  if (categoryId === 'other') throw new Error('「その他」は削除できません。');
+  if (!bookmarkCategoriesForTrip(trip).some((item) => item.id === categoryId)) return trip;
+  const builtIn = BOOKMARK_CATEGORIES.some((item) => item.id === categoryId);
+  return {
+    ...trip,
+    ...(builtIn
+      ? { hiddenBookmarkCategories: [...(trip.hiddenBookmarkCategories || []), categoryId] }
+      : { bookmarkCategories: (trip.bookmarkCategories || []).filter((item) => item.id !== categoryId) }),
+    bookmarks: (trip.bookmarks || []).map((bookmark) => bookmark.category === categoryId
+      ? { ...bookmark, category: 'other' } : bookmark),
   };
 }
 

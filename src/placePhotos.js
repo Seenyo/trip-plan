@@ -10,7 +10,7 @@ const coordinatesOf = (location) => {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 };
 
-export async function loadPlacePhotos(maps, item, limit = 6) {
+export async function loadPlacePhotos(maps, item, limit = 12) {
   if (!maps || !item?.title || (!item.placeId && ![item.coords?.lat, item.coords?.lng].every(Number.isFinite))) return [];
   const { Place } = await maps.importLibrary('places');
   let place;
@@ -35,6 +35,7 @@ export async function loadPlacePhotos(maps, item, limit = 6) {
   await place.fetchFields({ fields: ['photos'] });
   return (place.photos || []).filter((photo) => photo.googleMapsURI).slice(0, limit).map((photo) => ({
     url: photo.getURI({ maxWidth: 480 }),
+    fullUrl: photo.getURI({ maxWidth: 1600 }),
     googleMapsURI: photo.googleMapsURI,
     authors: (photo.authorAttributions || []).map((author) => ({
       name: author.displayName || '',

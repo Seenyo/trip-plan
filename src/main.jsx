@@ -65,7 +65,7 @@ import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTrip
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { namedPlaceFromMapClick } from './mapPlacePick';
 import { closestDayIndex, localDateISO, selectDefaultTrip } from './tripSelection';
-import { CUSTOM_CATEGORY_COLORS, addBookmarkCategory, bookmarkCategoriesForTrip, bookmarkCategory, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from './bookmarks';
+import { CUSTOM_CATEGORY_COLORS, addBookmarkCategory, bookmarkCategoriesForTrip, bookmarkCategory, findMatchingBookmark, moveActivityToBookmark, removeBookmarkCategory, removeTripBookmark, saveTripBookmark } from './bookmarks';
 import { uploadPlanImage } from './travelDocuments';
 import appIcon from './assets/trip-app-icon.svg';
 import {
@@ -1327,9 +1327,10 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
   </Modal>;
 }
 
-function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onAddCategory, onClose }) {
+function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onAddCategory, onRemoveCategory, onClose }) {
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
+  const [managingCategories, setManagingCategories] = useState(false);
   const bookmarks = trip.bookmarks || EMPTY_BOOKMARKS;
   const bookmarkCategories = useMemo(() => bookmarkCategoriesForTrip(trip), [trip]);
   const visible = bookmarks.filter((bookmark) => (category === 'all' || bookmark.category === category)
@@ -1338,8 +1339,19 @@ function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onAd
     <div className="bookmark-filters" aria-label="ブックマークのカテゴリ">
       {[{ id: 'all', label: `すべて ${bookmarks.length}` }, ...bookmarkCategories].map((item) => <button key={item.id}
         className={category === item.id ? 'is-active' : ''} onClick={() => setCategory(item.id)}>{item.label}</button>)}
-      <button className="bookmark-filter-add" onClick={onAddCategory}><Plus size={14} />カテゴリ追加</button>
     </div>
+    <div className="bookmark-category-tools">
+      <button onClick={onAddCategory}><Plus size={15} />カテゴリ追加</button>
+      <button onClick={() => setManagingCategories((value) => !value)} aria-expanded={managingCategories}>{managingCategories ? '管理を閉じる' : 'カテゴリを管理'}</button>
+    </div>
+    {managingCategories && <section className="bookmark-category-manager" aria-label="カテゴリ管理">
+      <p>カテゴリを削除しても候補は残り、「その他」に移ります。</p>
+      {bookmarkCategories.filter((item) => item.id !== 'other').map((item) => <div className="bookmark-category-manager-row" key={item.id}>
+        <span className="bookmark-category-symbol" style={{ '--bookmark-color': item.color }}>{item.symbol}</span>
+        <strong>{item.label}</strong><small>{bookmarks.filter((bookmark) => bookmark.category === item.id).length}件</small>
+        <button type="button" onClick={() => onRemoveCategory(item)} aria-label={`${item.label}カテゴリを削除`}><Trash2 size={15} />削除</button>
+      </div>)}
+    </section>}
     <label className="bookmark-list-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="候補を検索" aria-label="ブックマークを検索" /></label>
     {visible.length ? <ul className="bookmark-list">{visible.map((bookmark) => <li key={bookmark.id}>
       <button className="bookmark-list-place" onClick={() => onFocus(bookmark)} aria-label={`${bookmark.title}${mapAvailable && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng) ? 'を地図で表示' : 'の詳細を表示'}`}>
@@ -1407,7 +1419,7 @@ function App() {
   const trip = selectedId ? trips.find((item) => item.id === selectedId) || sortedTrips[0] : null;
   const day = trip?.days[Math.min(dayIndex, trip.days.length - 1)];
   const bookmarks = trip?.bookmarks || EMPTY_BOOKMARKS;
-  const bookmarkCategories = useMemo(() => bookmarkCategoriesForTrip(trip), [trip?.id, trip?.bookmarkCategories]);
+  const bookmarkCategories = useMemo(() => bookmarkCategoriesForTrip(trip), [trip?.id, trip?.bookmarkCategories, trip?.hiddenBookmarkCategories]);
 
   const selectTrip = useCallback((id) => {
     autoSelectOnLoad.current = false;
@@ -1618,13 +1630,19 @@ function App() {
             if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
             setModal(null);
           } else editBookmark(bookmark);
-        }} onEdit={editBookmark} onAddCategory={() => openBookmarkCategoryForm(modal)} onRemove={(bookmark) => setModal({ type: 'confirmBookmarkDelete', bookmark })} />}
+        }} onEdit={editBookmark} onAddCategory={() => openBookmarkCategoryForm(modal)} onRemove={(bookmark) => setModal({ type: 'confirmBookmarkDelete', bookmark })}
+        onRemoveCategory={(category) => setModal({ type: 'confirmBookmarkCategoryDelete', category })} />}
       {modal?.type === 'bookmarkCategory' && <BookmarkCategoryForm onClose={() => setModal(modal.returnTo || { type: 'bookmarkList' })}
         onSave={(label, color) => saveBookmarkCategory(label, color, modal.returnTo)} />}
       {modal?.type === 'confirmBookmarkDelete' && <Modal title="ブックマークを削除" eyebrow="削除の確認" onClose={() => setModal(null)} danger>
         <p className="delete-confirm-copy">「{modal.bookmark.title}」をこの旅行の候補から削除しますか？</p>
         <div className="modal-actions"><button className="secondary-button" onClick={() => setModal({ type: 'bookmarkList' })}>キャンセル</button>
           <button className="delete-confirm-button" onClick={() => { updateTrip((current) => removeTripBookmark(current, modal.bookmark.id)); setModal({ type: 'bookmarkList' }); }}>削除する</button></div>
+      </Modal>}
+      {modal?.type === 'confirmBookmarkCategoryDelete' && <Modal title="カテゴリを削除" eyebrow="削除の確認" onClose={() => setModal({ type: 'bookmarkList' })} danger>
+        <p className="delete-confirm-copy">「{modal.category.label}」を削除しますか？このカテゴリの候補 {bookmarks.filter((bookmark) => bookmark.category === modal.category.id).length}件は「その他」に移ります。</p>
+        <div className="modal-actions"><button className="secondary-button" onClick={() => setModal({ type: 'bookmarkList' })}>キャンセル</button>
+          <button className="delete-confirm-button" onClick={() => { updateTrip((current) => removeBookmarkCategory(current, modal.category.id)); setModal({ type: 'bookmarkList' }); }}>カテゴリを削除</button></div>
       </Modal>}
       {modal?.type === 'activity' && <ActivityForm initial={modal.activity} currentDate={trip.days.find((item) => item.id === modal.dayId)?.date || day.date} onSave={saveActivity}
         onMoveToBookmark={(activity, pendingFiles) => setModal({ type: 'placeChoice', place: activity, source: { dayId: modal.dayId, pendingFiles } })}
