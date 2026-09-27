@@ -32,8 +32,9 @@ export default function PlacePhotos({ item, variant = 'card', query }) {
   }, [available, key, query, retry]);
 
   if (!available) return null;
+  if (variant === 'card' && visibleResult.status === 'empty') return null;
   return <div className={`map-place-photos ${variant === 'modal' ? 'is-modal' : ''}`} aria-label={`${item.title}のGoogle マップの写真`}>
-    <strong className="map-place-photos-heading">Google マップの写真{visibleResult.status === 'ready' ? ` ${visibleResult.photos.length}枚` : ''}</strong>
+    {variant === 'modal' && <strong className="map-place-photos-heading">Google マップの写真{visibleResult.status === 'ready' ? ` ${visibleResult.photos.length}枚` : ''}</strong>}
     {visibleResult.status === 'loading' && <p className="map-place-photos-status" role="status">写真を読み込み中…</p>}
     {visibleResult.status === 'empty' && <p className="map-place-photos-status">この地点の写真は見つかりませんでした。</p>}
     {visibleResult.status === 'error' && <p className="map-place-photos-status">写真を読み込めませんでした。 <button type="button" onClick={() => setRetry((value) => value + 1)}>再試行</button></p>}

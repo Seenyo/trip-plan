@@ -45,6 +45,8 @@ it('offers new and past trips, then preserves the half sheet when a plan is sele
   expect(sheet.dataset.sheetStage).toBe('half');
   expect(document.querySelector('.app-shell').classList.contains('mobile-sheet-half')).toBe(true);
   expect(document.querySelectorAll('.map-pin')).toHaveLength(2);
+  expect(document.querySelector('.activity-detail-card')).toBeNull();
+  fireEvent.click(document.querySelectorAll('.map-pin')[1]);
   const detail = document.querySelector('.activity-detail-card');
   expect(detail.querySelector('h2').textContent).toBe('B地点');
   expect(detail.querySelector('[aria-label="B地点の地点ガイドを開く"]').textContent).toBe('');

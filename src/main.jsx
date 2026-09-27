@@ -236,6 +236,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
   const locationMarker = useRef(null);
   const locationWatch = useRef(null);
   const selectionRef = useRef(null);
+  const preserveViewportAfterClose = useRef(false);
   const routeCache = useRef(null);
   const renderedDayId = useRef(null);
   const travelTimesStopsKey = useRef(null);
@@ -339,9 +340,12 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
     handledFocusRequest.current = focusRequest.requestId;
     const type = focusRequest.previousDay ? 'previous' : 'activity';
     setSelection((current) => focusRequest.mode === 'toggle'
+      && current?.showDetail === false
       && current?.type === type
       && (type === 'previous' ? current.item?.id : current.activityId) === focused.id
-      ? null : type === 'previous' ? { type, item: focused } : { type, activityId: focused.id });
+      ? null : type === 'previous'
+        ? { type, item: focused, showDetail: focusRequest.mode !== 'toggle' }
+        : { type, activityId: focused.id, showDetail: focusRequest.mode !== 'toggle' });
   }, [day.id, day.activities, focusRequest?.activityId, focusRequest?.mode, focusRequest?.previousDay, focusRequest?.requestId, previousActivity]);
 
   useEffect(() => () => {
@@ -383,7 +387,9 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapNode.current) return;
     let cancelled = false;
-    const preserveBookmarkView = selectionRef.current?.type === 'bookmark' && renderedDayId.current === day.id;
+    const preserveMapView = (selectionRef.current?.type === 'bookmark' || preserveViewportAfterClose.current)
+      && renderedDayId.current === day.id;
+    preserveViewportAfterClose.current = false;
     renderedDayId.current = day.id;
     const mappedStops = day.activities.map((item, index) => ({ item, index })).filter(({ item }) => item.coords);
     const points = mappedStops.map(({ item }) => item.coords);
@@ -459,7 +465,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
     if (showPreviousMarker) {
       const previousMarker = createStopMarker(window.google.maps, mapRef.current, previousActivity, 0,
         routeColorForIndex(0),
-        () => setSelection((current) => current?.type === 'previous'
+        () => setSelection((current) => current?.type === 'previous' && current.showDetail !== false
           ? null : { type: 'previous', item: previousActivity }));
       overlays.current.push(previousMarker);
       bounds.extend(previousPoint);
@@ -467,7 +473,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
     mappedStops.filter(({ item }) => !selectedPreviousActivity && (!visibleStopIds || visibleStopIds.has(item.id))).forEach(({ item, index }) => {
       const color = routeColorForIndex(index);
       const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
-        () => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
+        () => setSelection((current) => current?.type === 'activity' && current.activityId === item.id && current.showDetail !== false
           ? null : { type: 'activity', activityId: item.id }));
       overlays.current.push(marker);
       bounds.extend(item.coords);
@@ -517,14 +523,16 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
       });
     }
     if (routePoints.length > 1) {
-      if (selectedPreviousActivity) {
-        mapRef.current.setCenter(previousPoint);
-        mapRef.current.setZoom(14);
-      } else if (selectedActivityId && !selectedStart) {
-        const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
-        if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
-      } else if (!preserveBookmarkView) mapRef.current.fitBounds(bounds,
-        selectedActivityId && compactViewport ? { top: 38, right: 42, bottom: 125, left: 42 } : 80);
+      if (!preserveMapView) {
+        if (selectedPreviousActivity) {
+          mapRef.current.setCenter(previousPoint);
+          mapRef.current.setZoom(14);
+        } else if (selectedActivityId && !selectedStart) {
+          const selectedPoint = mappedStops.find(({ item }) => item.id === selectedActivityId)?.item.coords;
+          if (selectedPoint) { mapRef.current.setCenter(selectedPoint); mapRef.current.setZoom(14); }
+        } else mapRef.current.fitBounds(bounds,
+          selectedActivityId && compactViewport ? { top: 38, right: 42, bottom: 125, left: 42 } : 80);
+      }
       const drawDrivingRoute = async () => {
         try {
           const { Route } = await window.google.maps.importLibrary('routes');
@@ -634,7 +642,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
             routeLine.setMap(mapRef.current);
             overlays.current.push(routeLine);
           });
-          if (!selectedActivityId && !selectedPreviousActivity && !preserveBookmarkView && selectionRef.current?.type !== 'bookmark' && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
+          if (!selectedActivityId && !selectedPreviousActivity && !preserveMapView && selectionRef.current?.type !== 'bookmark' && drivingRoutes.length === 1 && drivingRoutes[0].viewport) mapRef.current.fitBounds(drivingRoutes[0].viewport, 80);
           setRouteStatus(missingLegs.length ? 'partial' : 'ready');
         } catch (error) {
           if (cancelled) return;
@@ -643,9 +651,9 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
         }
       };
       drawDrivingRoute();
-    } else if (points.length > 1 && !preserveBookmarkView) {
+    } else if (points.length > 1 && !preserveMapView) {
       mapRef.current.fitBounds(bounds, 80);
-    } else if (!preserveBookmarkView) {
+    } else if (!preserveMapView) {
       mapRef.current.setCenter(center);
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
@@ -696,6 +704,11 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
   );
   const detailTravelTime = resolvedSelection?.type === 'activity'
     ? travelTimes[resolvedSelection.activityId] : null;
+  const closeDetail = () => {
+    preserveViewportAfterClose.current = selectionRef.current?.type === 'activity' || selectionRef.current?.type === 'previous';
+    setSelection(null);
+  };
+  const detailSelection = resolvedSelection?.showDetail === false ? null : resolvedSelection;
 
   if (!apiKey) {
     return (
@@ -721,15 +734,15 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
             className={`map-pin pin-${index + 1}`}
             key={item.id}
             style={{ '--pin-color': color, color, backgroundColor: '#ffffff' }}
-            onClick={() => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
+            onClick={() => setSelection((current) => current?.type === 'activity' && current.activityId === item.id && current.showDetail !== false
               ? null : { type: 'activity', activityId: item.id })}
             aria-label={item.title}
           >{index + 1}</button>
           );
         })}
         {accessCard()}
-        <MapDetailCard selection={resolvedSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
-          onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
+        <MapDetailCard selection={detailSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
+          onClose={closeDetail} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
       </div>
     );
   }
@@ -746,8 +759,8 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
         {locationStatus === 'locating' ? <LoaderCircle className="location-spinner" size={19} /> : <LocateFixed size={19} />}
       </button>
       {locationStatus === 'error' && <span className="map-location-error">現在地を取得できません</span>}
-      <MapDetailCard selection={resolvedSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
-        onClose={() => setSelection(null)} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
+      <MapDetailCard selection={detailSelection} tripId={tripId} travelTime={detailTravelTime} bookmarkCategories={bookmarkCategories}
+        onClose={closeDetail} onGuide={onGuide} onAddBookmarkToPlan={onAddBookmarkToPlan} onEditBookmark={onEditBookmark} />
     </div>
   );
 });
