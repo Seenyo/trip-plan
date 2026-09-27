@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOOKMARK_CATEGORIES, addBookmarkCategory, bookmarkCategoriesForTrip, findMatchingBookmark, moveActivityToBookmark, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
+import { BOOKMARK_CATEGORIES, addBookmarkCategory, bookmarkCategoriesForTrip, findMatchingBookmark, moveActivityToBookmark, removeBookmarkCategory, removeTripBookmark, saveTripBookmark } from '../src/bookmarks';
 
 const place = { placeId: 'google-place-1', title: '  Café  ', location: 'Main Street', coords: { lat: 64.1, lng: -21.9 } };
 
@@ -43,5 +43,26 @@ describe('trip bookmarks', () => {
     expect(saved.bookmarks[0].category).toBe('custom-spa');
     expect(() => addBookmarkCategory(withCategory, '温泉', '#4e9f9a', 'custom-again')).toThrow('同じ名前');
     expect(() => addBookmarkCategory(withCategory, 'x'.repeat(17), '#4e9f9a', 'custom-long')).toThrow('1〜16');
+  });
+
+  it('removes a custom category and moves its bookmarks to その他', () => {
+    const trip = addBookmarkCategory({ bookmarks: [] }, '温泉', '#4e9f9a', 'custom-spa');
+    const saved = saveTripBookmark(trip, { title: '青い温泉', coords: { lat: 64, lng: -21 } }, 'custom-spa', 'bookmark-spa');
+    const removed = removeBookmarkCategory(saved, 'custom-spa');
+    expect(bookmarkCategoriesForTrip(removed).some(({ id }) => id === 'custom-spa')).toBe(false);
+    expect(removed.bookmarks[0]).toMatchObject({ id: 'bookmark-spa', category: 'other', title: '青い温泉' });
+    expect(saved.bookmarks[0].category).toBe('custom-spa');
+  });
+
+  it('hides a built-in category per trip while keeping その他 available', () => {
+    const trip = saveTripBookmark({ bookmarks: [] }, place, 'food', 'bookmark-food');
+    const removed = removeBookmarkCategory(trip, 'food');
+    expect(bookmarkCategoriesForTrip(removed).map(({ id }) => id)).not.toContain('food');
+    expect(bookmarkCategoriesForTrip(removed).map(({ id }) => id)).toContain('other');
+    expect(removed.bookmarks[0].category).toBe('other');
+    expect(bookmarkCategoriesForTrip(trip).map(({ id }) => id)).toContain('food');
+    expect(saveTripBookmark(removed, { title: '別の店' }, 'food', 'new').bookmarks[1].category).toBe('other');
+    expect(removeBookmarkCategory(removed, 'food')).toBe(removed);
+    expect(() => removeBookmarkCategory(removed, 'other')).toThrow('削除できません');
   });
 });
