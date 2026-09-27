@@ -45,6 +45,8 @@ export default function PlacePhotos({ item, variant = 'card', query }) {
       <PhotoCredit photo={photo} />
     </div>)}</div>}
     {expandedPhoto?.key === key && <ImageViewer src={expandedPhoto.photo.fullUrl || expandedPhoto.photo.url} alt={`${item.title}の写真 ${expandedPhoto.index + 1}`}
-      onClose={() => setExpandedPhoto(null)} footer={<PhotoCredit photo={expandedPhoto.photo} />} />}
+      onClose={() => setExpandedPhoto(null)} footer={<PhotoCredit photo={expandedPhoto.photo} />}
+      photoIndex={expandedPhoto.index} photoCount={visibleResult.photos.length}
+      onNavigate={(index) => setExpandedPhoto({ photo: visibleResult.photos[index], index, key })} />}
   </div>;
 }
