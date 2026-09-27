@@ -71,15 +71,12 @@ export const reorderActivitiesIntoTimeSlots = (activities, fromIndex, toIndex) =
   return reordered.map((activity, index) => ({ ...activity, time: timeSlots[index] }));
 };
 
-export const DEFAULT_ROUTE_COLOR = '#ffad42';
 export const ROUTE_POINT_COLORS = [
   '#ffad42', '#71c3c9', '#f47f68', '#a99ce3',
   '#75aee0', '#82b98a', '#d68bac', '#d8a657',
 ];
 
-export const routeColorForIndex = (index, varyByPoint = false) => varyByPoint
-  ? ROUTE_POINT_COLORS[index % ROUTE_POINT_COLORS.length]
-  : DEFAULT_ROUTE_COLOR;
+export const routeColorForIndex = (index) => ROUTE_POINT_COLORS[index % ROUTE_POINT_COLORS.length];
 
 export const travelModeForActivity = (activity) => activity?.travelMode === 'WALKING' ? 'WALKING' : 'DRIVING';
 

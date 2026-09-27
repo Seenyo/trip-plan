@@ -40,7 +40,6 @@ import {
   PanelRightOpen,
   Pencil,
   Plus,
-  Settings,
   Search,
   Sparkles,
   Store,
@@ -111,20 +110,6 @@ const dateRange = (trip) => {
   const end = formatDay(trip.endDate, { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric' });
   return `${start} — ${end}`;
 };
-
-function useStoredState(key, initialValue) {
-  const [value, setValue] = useState(() => {
-    const resolvedInitial = () => typeof initialValue === 'function' ? initialValue() : initialValue;
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : resolvedInitial();
-    } catch {
-      return resolvedInitial();
-    }
-  });
-  useEffect(() => localStorage.setItem(key, JSON.stringify(value)), [key, value]);
-  return [value, setValue];
-}
 
 function useOnlineStatus() {
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -238,7 +223,7 @@ function MapDetailCard({ selection, travelTime, bookmarkCategories, onClose, onG
   </article>;
 }
 
-const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, bookmarkCategories, onMapPick, onTravelTimesChange, travelTimes, varyRouteColors, showBonus, showChargers, focusRequest, offline, compactViewport, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
+const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, bookmarks, bookmarkCategories, onMapPick, onTravelTimesChange, travelTimes, showBonus, showChargers, focusRequest, offline, compactViewport, onGuide, onAddBookmarkToPlan, onEditBookmark }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const overlays = useRef([]);
@@ -468,14 +453,14 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
       && (!selectedActivityId || selectedStart?.fromPreviousDay || selectedPreviousActivity);
     if (showPreviousMarker) {
       const previousMarker = createStopMarker(window.google.maps, mapRef.current, previousActivity, 0,
-        routeColorForIndex(0, varyRouteColors),
+        routeColorForIndex(0),
         () => setSelection((current) => current?.type === 'previous'
           ? null : { type: 'previous', item: previousActivity }));
       overlays.current.push(previousMarker);
       bounds.extend(previousPoint);
     }
     mappedStops.filter(({ item }) => !selectedPreviousActivity && (!visibleStopIds || visibleStopIds.has(item.id))).forEach(({ item, index }) => {
-      const color = routeColorForIndex(index, varyRouteColors);
+      const color = routeColorForIndex(index);
       const marker = createStopMarker(window.google.maps, mapRef.current, item, index + 1, color,
         () => setSelection((current) => current?.type === 'activity' && current.activityId === item.id
           ? null : { type: 'activity', activityId: item.id }));
@@ -615,12 +600,12 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
             routeStops,
             drivingRoutes,
             fallbackDestinationIndexes,
-            (index) => routeColorForIndex(index, varyRouteColors),
+            routeColorForIndex,
           );
           const visibleLegs = selectedActivityId
             ? routeLegs.filter((leg) => selectedStart && leg.destinationIndex === selectedDestinationIndex)
             : selectedPreviousActivity ? [] : routeLegs;
-          const routeChunks = varyRouteColors && !selectedActivityId
+          const routeChunks = !selectedActivityId
             ? splitOverlappingRouteLegs(visibleLegs)
             : visibleLegs.map((leg) => ({ ...leg, shared: false, sharedCount: 1, sharedIndex: 0 }));
           const routeLines = routeChunks.flatMap((chunk) => {
@@ -660,7 +645,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
       mapRef.current.setZoom(points.length ? 14 : 12);
     }
     return () => { cancelled = true; };
-  }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, varyRouteColors, compactViewport]);
+  }, [apiKey, day, previousDay, mapStatus, onTravelTimesChange, selectedActivityId, selectedPreviousActivity, showBonus, showChargers, compactViewport]);
 
   useEffect(() => {
     bookmarkMarkers.current.forEach((marker) => marker.setMap(null));
@@ -725,7 +710,7 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, day, previousDay, book
           return item.id === selectedActivityId || (selectedIndex > 0 && item.id === day.activities[selectedIndex - 1]?.id);
         }).map((item) => {
           const index = day.activities.findIndex((activity) => activity.id === item.id);
-          const color = routeColorForIndex(index, varyRouteColors);
+          const color = routeColorForIndex(index);
           return (
           <button
             className={`map-pin pin-${index + 1}`}
@@ -810,7 +795,7 @@ function DayStrip({ trip, dayIndex, setDayIndex }) {
   );
 }
 
-function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit, onDelete, onGuide, onSelect }) {
+function SortableStop({ item, index, count, travelTime, onEdit, onDelete, onGuide, onSelect }) {
   const {
     attributes,
     listeners,
@@ -827,9 +812,9 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
       <div className="stop-track">
         <span className="stop-number" style={{
           backgroundColor: '#ffffff',
-          color: routeColorForIndex(index, varyRouteColors),
+          color: routeColorForIndex(index),
         }}>{index + 1}</span>
-        {index < count - 1 && <span className="stop-rule" style={{ backgroundColor: routeColorForIndex(index + 1, varyRouteColors) }} />}
+        {index < count - 1 && <span className="stop-rule" style={{ backgroundColor: routeColorForIndex(index + 1) }} />}
       </div>
       <div className="stop-copy" tabIndex="0" aria-label={`${item.title}までのルートを地図で表示`}
         onClick={(event) => { if (!event.target.closest('button, a, input, textarea, select')) onSelect(item); }}
@@ -867,8 +852,8 @@ function SortableStop({ item, index, count, travelTime, varyRouteColors, onEdit,
   );
 }
 
-function PreviousDayStop({ item, varyRouteColors, onGuide, onSelect }) {
-  const color = routeColorForIndex(0, varyRouteColors);
+function PreviousDayStop({ item, onGuide, onSelect }) {
+  const color = routeColorForIndex(0);
   return <article className="stop previous-day-stop">
     <div className="stop-time"><span>前日</span><strong>{item.time || '時間未定'}</strong></div>
     <div className="stop-track">
@@ -891,7 +876,7 @@ function PreviousDayStop({ item, varyRouteColors, onGuide, onSelect }) {
   </article>;
 }
 
-function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
+function Timeline({ day, previousDay, travelTimes, onEdit, onDelete, onAdd, onReorder, onGuide, onSelect }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -912,7 +897,7 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
       autoScroll={{ canScroll: (element) => element.classList.contains('itinerary-sheet') }}
       onDragStart={({ active }) => setActiveId(active.id)} onDragCancel={() => setActiveId(null)} onDragEnd={finishDrag}>
       <div className="timeline">
-        {previousActivity && <PreviousDayStop item={previousActivity} varyRouteColors={varyRouteColors}
+        {previousActivity && <PreviousDayStop item={previousActivity}
           onGuide={onGuide} onSelect={onSelect} />}
         {day.activities.length === 0 ? (
           <button className="empty-day" onClick={onAdd}>
@@ -922,7 +907,7 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
           </button>
         ) : <SortableContext items={day.activities.map((item) => item.id)} strategy={verticalListSortingStrategy}>
           {day.activities.map((item, index) => <SortableStop key={item.id} item={item} index={index}
-            count={day.activities.length} travelTime={travelTimes[item.id]} varyRouteColors={varyRouteColors}
+            count={day.activities.length} travelTime={travelTimes[item.id]}
             onEdit={onEdit} onDelete={onDelete} onGuide={onGuide} onSelect={onSelect} />)}
         </SortableContext>}
         {day.activities.length > 0 && <button className="add-stop-inline" onClick={onAdd}><Plus size={16} /> 予定を追加</button>}
@@ -938,7 +923,7 @@ function Timeline({ day, previousDay, travelTimes, varyRouteColors, onEdit, onDe
   );
 }
 
-function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult, undo, redo, canUndo, canRedo }) {
+function ItinerarySheet({ trip, day, previousDay, travelTimes, dayIndex, setDayIndex, stage, setStage, onAdd, onEdit, onDelete, onReorder, onEditDay, onGuide, onSelect, onSearchResult, undo, redo, canUndo, canRedo }) {
   const touch = useRef(null);
   const dayStripTouch = useRef(null);
   const suppressClickUntil = useRef(0);
@@ -1040,7 +1025,7 @@ function ItinerarySheet({ trip, day, previousDay, travelTimes, varyRouteColors, 
         <span>{dayIndex + 1} / {trip.days.length}</span>
         <button aria-label="次の日" title="次の日" onClick={() => setDayIndex(Math.min(trip.days.length - 1, dayIndex + 1))} disabled={dayIndex === trip.days.length - 1}><ChevronRight size={17} /></button>
       </div>
-      <Timeline day={day} previousDay={previousDay} travelTimes={travelTimes} varyRouteColors={varyRouteColors}
+      <Timeline day={day} previousDay={previousDay} travelTimes={travelTimes}
         onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} onReorder={onReorder} onGuide={onGuide} onSelect={onSelect} />
     </section>
   );
@@ -1244,20 +1229,6 @@ function DayForm({ day, onSave, onAddDay, onClose }) {
   );
 }
 
-function SettingsModal({ varyRouteColors, setVaryRouteColors, onClose }) {
-  const [varyColors, setVaryColors] = useState(varyRouteColors);
-  return (
-    <Modal title="地図の設定" onClose={onClose}>
-      <label className="route-color-setting">
-        <input type="checkbox" checked={varyColors} onChange={(event) => setVaryColors(event.target.checked)} />
-        <span className="setting-switch" aria-hidden="true"><i /></span>
-        <span><strong>地点ごとにルート色を変える</strong><small>地図の区間と旅程の番号を同じ色で表示します</small></span>
-      </label>
-      <div className="modal-actions"><button className="secondary-button" onClick={onClose}>キャンセル</button><button className="primary-button" onClick={() => { setVaryRouteColors(varyColors); onClose(); }}>設定を保存</button></div>
-    </Modal>
-  );
-}
-
 function BookmarkCategoryForm({ onSave, onClose }) {
   const [label, setLabel] = useState('');
   const [color, setColor] = useState(CUSTOM_CATEGORY_COLORS[0]);
@@ -1400,7 +1371,6 @@ function App() {
   const { trips, setTrips, undo, redo, canUndo, canRedo, syncStatus } = useSharedWorkspace(initialTrips);
   const online = useOnlineStatus();
   const bundledApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-  const [varyRouteColors, setVaryRouteColors] = useStoredState('roam.varyRouteColors.v2', true);
   const apiKey = bundledApiKey;
   const sortedTrips = useMemo(() => sortTripsByStartDate(trips), [trips]);
   const openingSelection = useRef(selectDefaultTrip(trips, localDateISO()));
@@ -1581,7 +1551,6 @@ function App() {
               ? <LoaderCircle className="offline-save-spinner" size={19} />
               : offlineComplete ? <Check size={19} /> : offlinePartial ? <CircleAlert size={19} /> : <Download size={19} />}
           </button>
-          <button className="icon-button" onClick={() => setModal({ type: 'settings' })} aria-label="地図の設定"><Settings size={19} /></button>
           <button className="icon-button timeline-toggle" onClick={() => setTimelineOpen((open) => !open)}
             aria-label={timelineOpen ? '旅程を閉じる' : '旅程を開く'} title={timelineOpen ? '旅程を閉じる' : '旅程を開く'}>
             {timelineOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
@@ -1590,7 +1559,7 @@ function App() {
         {online && <SearchBar apiKey={apiKey} onResult={mapPick} />}
         <GoogleMap apiKey={online ? apiKey : ''} day={day} previousDay={trip.days[dayIndex - 1]} bookmarks={bookmarks} bookmarkCategories={bookmarkCategories} onMapPick={mapPick}
           onTravelTimesChange={setTravelTimes} travelTimes={travelTimes}
-          varyRouteColors={varyRouteColors} showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
+          showBonus={trip.id === icelandTrip.id} showChargers focusRequest={mapFocus} offline={!online}
           compactViewport={sheetStage === 'half'}
           onGuide={openGuide} onAddBookmarkToPlan={addBookmarkToPlan} onEditBookmark={editBookmark} />
         <button className="map-bookmarks-button" onClick={() => setModal({ type: 'bookmarkList' })}
@@ -1604,7 +1573,7 @@ function App() {
           {offlineSave.message}
         </div>}
       </section>
-      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} varyRouteColors={varyRouteColors} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} onAdd={() => setModal({ type: 'activity', dayId: day.id })} onEdit={(activity) => setModal({ type: 'activity', dayId: day.id, activity })} onDelete={(id) => {
+      <ItinerarySheet trip={trip} day={day} previousDay={trip.days[dayIndex - 1]} travelTimes={travelTimes} dayIndex={dayIndex} setDayIndex={setDayIndex} stage={sheetStage} setStage={setSheetStage} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} onAdd={() => setModal({ type: 'activity', dayId: day.id })} onEdit={(activity) => setModal({ type: 'activity', dayId: day.id, activity })} onDelete={(id) => {
         const activity = day.activities.find((item) => item.id === id);
         if (activity) setModal({ type: 'confirmActivityDelete', activity, tripId: trip.id, dayId: day.id });
       }} onReorder={(activities) => updateDay((current) => ({ ...current, activities }))} onEditDay={() => setModal({ type: 'day', day })} onGuide={openGuide}
@@ -1664,8 +1633,6 @@ function App() {
       </Modal>}
       {modal?.type === 'trip' && <TripForm onSave={createTrip} onClose={() => setModal(null)} />}
       {modal?.type === 'day' && <DayForm day={modal.day} onClose={() => setModal(null)} onAddDay={addDay} onSave={(saved) => { updateDay(() => saved); setModal(null); }} />}
-      {modal?.type === 'settings' && <SettingsModal varyRouteColors={varyRouteColors}
-        setVaryRouteColors={setVaryRouteColors} onClose={() => setModal(null)} />}
     </main>
   );
 }
