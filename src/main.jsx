@@ -62,7 +62,8 @@ import { icelandSpotMeta } from './icelandSpots';
 import { itineraryPhotoQuery } from './itineraryPhotoQuery';
 import './offline';
 import './travelReader.css';
-import { searchBonusStores, searchEvChargers, searchTripActivities } from './planPlaces';
+import { searchEvChargers, searchTripActivities } from './planPlaces';
+import { icelandBonusStores } from './bonusStores';
 import { isOfflineTripComplete, offlineTripManifest, removeOfflineTrip, saveTripOffline } from './offlineTrip';
 import { routeLegsForDisplay, splitOverlappingRouteLegs } from './routePresentation';
 import { namedPlaceFromMapClick } from './mapPlacePick';
@@ -242,7 +243,6 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
   const travelTimesStopsKey = useRef(null);
   const mapPickRequest = useRef(0);
   const mapPickCallback = useRef(onMapPick);
-  const bonusCache = useRef(new Map());
   const chargerCache = useRef(new Map());
   const handledFocusRequest = useRef(null);
   const [mapStatus, setMapStatus] = useState(apiKey ? 'loading' : 'missing');
@@ -478,26 +478,15 @@ const GoogleMap = React.memo(function GoogleMap({ apiKey, tripId, day, previousD
       overlays.current.push(marker);
       bounds.extend(item.coords);
     });
-    if (!selectedActivityId && !selectedPreviousActivity && showBonus && mappedStops.length) {
-      const bonusKey = JSON.stringify(mappedStops.map(({ item }) => [item.coords.lat, item.coords.lng]));
-      let storesPromise = bonusCache.current.get(bonusKey);
-      if (!storesPromise) {
-        storesPromise = searchBonusStores(window.google.maps, mappedStops.map(({ item }) => item));
-        bonusCache.current.set(bonusKey, storesPromise);
-      }
-      storesPromise.then((stores) => {
-        if (cancelled) return;
-        stores.forEach((store) => {
-          const marker = createMapMarker(window.google.maps, mapRef.current, store.coords, {
-            className: 'map-bonus-marker',
-            text: 'B',
-            title: `${store.title}の詳細を表示`,
-            onClick: () => setSelection({ type: 'bonus', item: store }),
-          });
-          overlays.current.push(marker);
+    if (!selectedActivityId && !selectedPreviousActivity && showBonus) {
+      icelandBonusStores.forEach((store) => {
+        const marker = createMapMarker(window.google.maps, mapRef.current, store.coords, {
+          className: 'map-bonus-marker',
+          text: 'B',
+          title: `${store.title}の詳細を表示`,
+          onClick: () => setSelection({ type: 'bonus', item: store }),
         });
-      }).catch((error) => {
-        if (!cancelled) console.warn('近くのBónusを表示できませんでした。', error);
+        overlays.current.push(marker);
       });
     }
     if (!selectedActivityId && !selectedPreviousActivity && showChargers && mappedStops.length) {

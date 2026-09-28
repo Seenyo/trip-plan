@@ -44,49 +44,11 @@ const locationLiteral = (location) => {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 };
 
-const isBonusStore = (place) => normalizeText(place.displayName).replace(/[^a-z]/g, '').startsWith('bonus');
-
 export const isLodgingActivity = (activity) => Boolean(activity?.coords) && (
   activity.category === 'lodging'
   || /(?:^|-)stay(?:-|$)/i.test(activity.id || '')
   || /hotel|hostel|guesthouse|guest house|resort|lodge|igloo|宿泊|ホテル|旅館/i.test(activity.title || '')
 );
-
-export async function searchBonusStores(maps, activities) {
-  const coordinates = activities.map((activity) => activity.coords).filter(Boolean);
-  if (!coordinates.length) return [];
-  const centers = coordinates.filter((coordinate, index) => (
-    coordinates.slice(0, index).every((previous) => distanceKm(previous, coordinate) > 20)
-  ));
-  const { Place } = await maps.importLibrary('places');
-  const responses = await Promise.allSettled(centers.map((center) => Place.searchByText({
-    textQuery: 'Bónus supermarket',
-    fields: ['id', 'displayName', 'formattedAddress', 'location', 'googleMapsURI'],
-    includedType: 'supermarket',
-    useStrictTypeFiltering: true,
-    locationBias: { center, radius: 30000 },
-    language: 'is',
-    region: 'is',
-    maxResultCount: 5,
-  })));
-  const stores = responses.flatMap((response) => response.status === 'fulfilled' ? response.value.places || [] : []);
-  const unique = new Map();
-  stores.forEach((place) => {
-    const coords = locationLiteral(place.location);
-    if (!coords || !isBonusStore(place)
-      || coordinates.every((coordinate) => distanceKm(coordinate, coords) > 30)) return;
-    const id = place.id || `${coords.lat},${coords.lng}`;
-    if (!unique.has(id)) unique.set(id, {
-      id,
-      placeId: place.id || null,
-      title: place.displayName || 'Bónus',
-      location: place.formattedAddress || '',
-      coords,
-      googleMapsURI: place.googleMapsURI || '',
-    });
-  });
-  return [...unique.values()];
-}
 
 export async function searchEvChargers(maps, activities) {
   const hotels = activities.filter(isLodgingActivity);

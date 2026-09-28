@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isLodgingActivity, searchBonusStores, searchEvChargers, searchTripActivities } from '../src/planPlaces';
+import { isLodgingActivity, searchEvChargers, searchTripActivities } from '../src/planPlaces';
 
 describe('plan place features', () => {
   it('searches only activities from the selected trip and ignores accents', () => {
@@ -14,20 +14,6 @@ describe('plan place features', () => {
     expect(searchTripActivities(selectedTrip, 'bonus').map(({ activity }) => activity.id)).toEqual(['two']);
     expect(searchTripActivities(selectedTrip, 'tectonic plates').map(({ activity }) => activity.id)).toEqual(['one']);
     expect(searchTripActivities(otherTrip, 'bonus').map(({ activity }) => activity.id)).toEqual(['three']);
-  });
-
-  it('keeps nearby Bónus branches and excludes other supermarkets', async () => {
-    const searchByText = vi.fn().mockResolvedValue({ places: [
-      { id: 'bonus', displayName: 'Bónus Fitjar', formattedAddress: 'Keflavík', location: { lat: 64, lng: -22 }, googleMapsURI: 'https://maps.example/bonus' },
-      { id: 'other', displayName: 'Krónan', formattedAddress: 'Keflavík', location: { lat: 64, lng: -22.01 } },
-      { id: 'far', displayName: 'Bónus', formattedAddress: 'Far away', location: { lat: 66, lng: -18 } },
-    ] });
-    const maps = { importLibrary: vi.fn().mockResolvedValue({ Place: { searchByText } }) };
-
-    const stores = await searchBonusStores(maps, [{ coords: { lat: 64, lng: -22 } }]);
-
-    expect(stores).toEqual([{ id: 'bonus', placeId: 'bonus', title: 'Bónus Fitjar', location: 'Keflavík', coords: { lat: 64, lng: -22 }, googleMapsURI: 'https://maps.example/bonus' }]);
-    expect(searchByText).toHaveBeenCalledWith(expect.objectContaining({ textQuery: 'Bónus supermarket', includedType: 'supermarket' }));
   });
 
   it('finds the three nearest EV chargers within 10 km of lodging stops', async () => {
