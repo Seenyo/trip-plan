@@ -1299,9 +1299,10 @@ function BookmarkCategoryForm({ onSave, onClose }) {
   </Modal>;
 }
 
-function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount = 0, bookmarkCategories, preferredCategory,
+function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount = 0, bookmarkCategories, preferredCategory, draftNotes,
   onSaveBookmark, onAddToPlan, onAddCategory, onClose }) {
   const [category, setCategory] = useState(preferredCategory || existing?.category || place.category || 'other');
+  const [notes, setNotes] = useState(draftNotes ?? existing?.notes ?? place.notes ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const save = async () => {
@@ -1309,7 +1310,7 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
     setBusy(true);
     setError('');
     try {
-      await onSaveBookmark(category);
+      await onSaveBookmark(category, notes);
     } catch (cause) {
       setError(cause.message || 'ブックマークを保存できませんでした。');
       setBusy(false);
@@ -1317,11 +1318,13 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
   };
   return <Modal title={movingFromPlan ? '予定をブックマークに移す' : place.title || '場所'} eyebrow="この旅行の候補" onClose={() => { if (!busy) onClose(); }}>
     {place.location && <p className="bookmark-place-address">{place.location}</p>}
-    {place.notes && <p className="bookmark-place-notes">{place.notes}</p>}
     {place.images?.[0] && <PlanImage image={place.images[0]} className="bookmark-place-image" expandable />}
     {!movingFromPlan && <PlacePhotos item={place} variant="modal" />}
     {pendingPhotoCount > 0 && <p className="bookmark-pending-photos">追加した写真 {pendingPhotoCount}枚は、候補への移動を確定してからアップロードします。</p>}
-    {!movingFromPlan && <button className="bookmark-plan-action" onClick={onAddToPlan}><Plus size={17} /> この日の予定に追加</button>}
+    {!movingFromPlan && <button className="bookmark-plan-action" onClick={() => onAddToPlan(notes)}><Plus size={17} /> この日の予定に追加</button>}
+    <label className="field bookmark-notes-field"><span>メモ</span>
+      <textarea rows="3" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={busy} placeholder="食べたいもの、営業時間、気になることなど" />
+    </label>
     <fieldset className="bookmark-category-field">
       <legend>{existing ? '保存先のカテゴリを変更' : 'ブックマークに保存'}</legend>
       <p>{movingFromPlan ? 'カテゴリを選んで保存すると、この予定を旅程から外します。' : '予定に入れる前の候補として、この旅行に保存します。'}</p>
@@ -1331,7 +1334,7 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
           <span className="bookmark-category-symbol">{item.symbol}</span>{item.label}
         </label>)}
       </div>
-      <button type="button" className="bookmark-add-category" onClick={onAddCategory}><Plus size={15} /> 自分でカテゴリを追加</button>
+      <button type="button" className="bookmark-add-category" onClick={() => onAddCategory({ category, notes })}><Plus size={15} /> 自分でカテゴリを追加</button>
     </fieldset>
     {error && <p className="plan-photo-error" role="alert">{error}</p>}
     <div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>キャンセル</button>
@@ -1339,14 +1342,15 @@ function PlaceActionModal({ place, existing, movingFromPlan, pendingPhotoCount =
   </Modal>;
 }
 
-function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onAddCategory, onRemoveCategory, onClose }) {
+function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onSaveNotes, onRemove, onAddCategory, onRemoveCategory, onClose }) {
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
   const [managingCategories, setManagingCategories] = useState(false);
+  const [noteEditor, setNoteEditor] = useState(null);
   const bookmarks = trip.bookmarks || EMPTY_BOOKMARKS;
   const bookmarkCategories = useMemo(() => bookmarkCategoriesForTrip(trip), [trip]);
   const visible = bookmarks.filter((bookmark) => (category === 'all' || bookmark.category === category)
-    && `${bookmark.title} ${bookmark.location}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+    && `${bookmark.title} ${bookmark.location} ${bookmark.notes || ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   return <Modal title="ブックマーク" eyebrow={trip.title} onClose={onClose}>
     <div className="bookmark-filters" aria-label="ブックマークのカテゴリ">
       {[{ id: 'all', label: `すべて ${bookmarks.length}` }, ...bookmarkCategories].map((item) => <button key={item.id}
@@ -1372,7 +1376,19 @@ function BookmarkListModal({ trip, mapAvailable, onFocus, onEdit, onRemove, onAd
         {mapAvailable && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng)
           ? <MapPin size={17} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
       </button>
-      <div className="bookmark-list-actions"><button onClick={() => onEdit(bookmark)}>カテゴリ変更</button><button onClick={() => onRemove(bookmark)}>削除</button></div>
+      {bookmark.notes && noteEditor?.id !== bookmark.id && <p className="bookmark-list-note">{bookmark.notes}</p>}
+      {noteEditor?.id !== bookmark.id && <div className="bookmark-list-actions"><button onClick={() => setNoteEditor({ id: bookmark.id, notes: bookmark.notes || '' })}
+        aria-label={`${bookmark.title}のメモを編集`}>{bookmark.notes ? 'メモ編集' : 'メモ追加'}</button><button onClick={() => onEdit(bookmark)}>カテゴリ変更</button><button onClick={() => onRemove(bookmark)}>削除</button></div>}
+      {noteEditor?.id === bookmark.id && <form className="bookmark-list-note-editor" onSubmit={(event) => {
+        event.preventDefault();
+        onSaveNotes(bookmark.id, noteEditor.notes);
+        setNoteEditor(null);
+      }}>
+        <label className="field"><span>{bookmark.title}のメモ</span><textarea rows="3" autoFocus value={noteEditor.notes}
+          onChange={(event) => setNoteEditor((current) => ({ ...current, notes: event.target.value }))} /></label>
+        <div className="bookmark-note-actions"><button type="button" className="secondary-button" onClick={() => setNoteEditor(null)}>キャンセル</button>
+          <button type="submit" className="primary-button">メモを保存</button></div>
+      </form>}
     </li>)}</ul> : <p className="bookmark-empty">{bookmarks.length ? '一致する候補がありません。' : '地図上の場所や検索結果から、行きたい場所を保存できます。'}</p>}
   </Modal>;
 }
@@ -1630,9 +1646,10 @@ function App() {
       {reader && <React.Suspense fallback={<div className="travel-reader-backdrop" role="status">ページを開いています…</div>}><TravelReader trip={reader.trip} activity={reader.activity} onClose={() => setReader(null)} /></React.Suspense>}
       {modal?.type === 'placeChoice' && <PlaceActionModal key={modal.place.id || modal.place.placeId || `${modal.place.coords?.lat},${modal.place.coords?.lng}`}
         place={modal.place} existing={findMatchingBookmark(bookmarks, modal.place)} movingFromPlan={Boolean(modal.source)} pendingPhotoCount={modal.source?.pendingFiles?.length || 0}
-        bookmarkCategories={bookmarkCategories} preferredCategory={modal.preferredCategory} onClose={() => setModal(null)}
-        onAddCategory={() => openBookmarkCategoryForm(modal)} onAddToPlan={() => addBookmarkToPlan(modal.place)} onSaveBookmark={(category) => modal.source
-          ? movePlanToBookmark(modal.place, category, modal.source) : saveBookmark(modal.place, category)} />}
+        bookmarkCategories={bookmarkCategories} preferredCategory={modal.preferredCategory} draftNotes={modal.draftNotes} onClose={() => setModal(null)}
+        onAddCategory={({ category, notes }) => openBookmarkCategoryForm({ ...modal, preferredCategory: category, draftNotes: notes })}
+        onAddToPlan={(notes) => addBookmarkToPlan({ ...modal.place, notes })} onSaveBookmark={(category, notes) => modal.source
+          ? movePlanToBookmark({ ...modal.place, notes }, category, modal.source) : saveBookmark({ ...modal.place, notes }, category)} />}
       {modal?.type === 'bookmarkList' && <BookmarkListModal trip={trip} mapAvailable={online && Boolean(apiKey)} onClose={() => setModal(null)}
         onFocus={(bookmark) => {
           if (online && apiKey && Number.isFinite(bookmark.coords?.lat) && Number.isFinite(bookmark.coords?.lng)) {
@@ -1640,7 +1657,9 @@ function App() {
             if (window.matchMedia('(max-width: 820px)').matches) setSheetStage('peek');
             setModal(null);
           } else editBookmark(bookmark);
-        }} onEdit={editBookmark} onAddCategory={() => openBookmarkCategoryForm(modal)} onRemove={(bookmark) => setModal({ type: 'confirmBookmarkDelete', bookmark })}
+        }} onEdit={editBookmark} onSaveNotes={(id, notes) => updateTrip((current) => ({ ...current,
+          bookmarks: (current.bookmarks || []).map((bookmark) => bookmark.id === id ? { ...bookmark, notes } : bookmark),
+        }))} onAddCategory={() => openBookmarkCategoryForm(modal)} onRemove={(bookmark) => setModal({ type: 'confirmBookmarkDelete', bookmark })}
         onRemoveCategory={(category) => setModal({ type: 'confirmBookmarkCategoryDelete', category })} />}
       {modal?.type === 'bookmarkCategory' && <BookmarkCategoryForm onClose={() => setModal(modal.returnTo || { type: 'bookmarkList' })}
         onSave={(label, color) => saveBookmarkCategory(label, color, modal.returnTo)} />}
