@@ -45,6 +45,8 @@ it('moves an edited plan into the chosen bookmark category', async () => {
   fireEvent.click(screen.getByRole('button', { name: '古い教会を編集' }));
   fireEvent.change(screen.getByLabelText('写真を追加'), { target: { files: [new File(['photo'], 'photo.jpg', { type: 'image/jpeg' })] } });
   fireEvent.click(screen.getByRole('button', { name: 'ブックマークに移す' }));
+  expect(screen.getByRole('textbox', { name: 'メモ' }).value).toBe('入口を確認');
+  fireEvent.change(screen.getByRole('textbox', { name: 'メモ' }), { target: { value: '入口と駐車場を確認' } });
   fireEvent.click(screen.getByRole('radio', { name: /遺跡/ }));
   fireEvent.click(screen.getByRole('button', { name: '候補に移す' }));
   await waitFor(() => expect(uploadPlanImage).toHaveBeenCalledTimes(1));
@@ -53,6 +55,7 @@ it('moves an edited plan into the chosen bookmark category', async () => {
   fireEvent.click(screen.getByRole('button', { name: '遺跡' }));
   expect(screen.getByRole('button', { name: '古い教会の詳細を表示' })).toBeTruthy();
   expect(workspace.trips[0].bookmarks[0].route).toBe(false);
+  expect(workspace.trips[0].bookmarks[0].notes).toBe('入口と駐車場を確認');
   fireEvent.click(screen.getByRole('button', { name: '古い教会の詳細を表示' }));
   fireEvent.click(screen.getByRole('button', { name: 'この日の予定に追加' }));
   fireEvent.click(screen.getByRole('button', { name: '予定を保存' }));

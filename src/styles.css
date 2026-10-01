@@ -449,7 +449,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-detail-actions button + button { color: var(--slate); background: var(--soft); }
 
 .bookmark-place-address { margin: -7px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.bookmark-place-notes { margin: 0 0 14px; color: var(--ink); font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
+.bookmark-notes-field { margin: 14px 0; }
 .bookmark-place-image { width: 96px; height: 96px; margin: 0 0 14px; }
 .bookmark-pending-photos { margin: 0 0 14px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .bookmark-plan-action { width: 100%; min-height: 45px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 11px; color: var(--slate); background: white; font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -488,6 +488,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .bookmark-list-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 10px 8px; }
 .bookmark-list-actions button { min-height: 40px; padding: 0 6px; border: 0; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer; }
 .bookmark-list-actions button:last-child { color: #b43f34; }
+.bookmark-list-note { margin: 0 12px 8px; color: var(--ink); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bookmark-list-note-editor { padding: 0 12px 12px; }
+.bookmark-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.bookmark-note-actions button { min-height: 44px; }
 .bookmark-empty { margin: 18px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .bookmark-category-form { gap: 18px 12px; }
 .bookmark-color-field { margin: 0; padding: 0; border: 0; }
