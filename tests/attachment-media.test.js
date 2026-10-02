@@ -17,7 +17,7 @@ beforeEach(async () => {
   vi.stubGlobal('fetch',vi.fn(async () => new Response('bytes',{headers:{'Content-Type':'image/webp'}})));
   media=await import('../src/attachmentMedia');
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it('uses an existing offline cache online without signing or downloading', async () => {
   const key=new URL('./__offline_media__/trip%2Fphoto',window.location.href).href;
@@ -55,4 +55,32 @@ it('returns missing media offline without making a network request', async () =>
   Object.defineProperty(navigator,'onLine',{configurable:true,value:false});
   expect(await media.attachmentBlob('missing')).toBeNull();
   expect(fetch).not.toHaveBeenCalled(); expect(attachmentUrl).not.toHaveBeenCalled();
+});
+
+it('allows a progressing download to take longer than fifteen seconds', async () => {
+  vi.useFakeTimers();
+  let signal;
+  fetch.mockImplementationOnce(async (_url, options) => {
+    signal = options.signal;
+    await new Promise(resolve => setTimeout(resolve, 20000));
+    return new Response('slow photo');
+  });
+  const download = media.attachmentBlob('slow');
+  await vi.advanceTimersByTimeAsync(16000);
+  expect(signal.aborted).toBe(false);
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(await (await download).text()).toBe('slow photo');
+  await vi.advanceTimersByTimeAsync(media.ATTACHMENT_DOWNLOAD_TIMEOUT_MS);
+  expect(signal.aborted).toBe(false);
+});
+
+it('still aborts stalled downloads after the longer timeout', async () => {
+  vi.useFakeTimers();
+  fetch.mockImplementationOnce((_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+  }));
+  const outcome = media.attachmentBlob('stalled').catch(error => error);
+  await vi.advanceTimersByTimeAsync(media.ATTACHMENT_DOWNLOAD_TIMEOUT_MS);
+  expect((await outcome).name).toBe('AbortError');
+  expect(store.put).not.toHaveBeenCalled();
 });

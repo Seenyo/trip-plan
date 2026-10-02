@@ -4,6 +4,8 @@ const MEDIA_CACHE = 'roam-trip-media-v1';
 const pending = new Map();
 const memory = new Map();
 const MEMORY_LIMIT = 20 * 1024 * 1024;
+// A permitted 10MB attachment can take minutes on a travel/mobile connection.
+export const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 let memoryBytes = 0;
 const mediaRequest = (path) => new Request(new URL(`./__offline_media__/${encodeURIComponent(path)}`, window.location.href));
 
@@ -52,7 +54,7 @@ export function attachmentBlob(path) {
     const url = await attachmentUrl(path);
     if (!url) return null;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), ATTACHMENT_DOWNLOAD_TIMEOUT_MS);
     try {
       const response = await fetch(url, { signal: controller.signal });
       if (!response.ok) throw new Error(`添付ファイルを取得できませんでした（${response.status}）。`);

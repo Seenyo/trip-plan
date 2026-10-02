@@ -7,6 +7,7 @@ export const ATTACHMENT_URL_TTL_SECONDS = 3600;
 const signedUrls = new Map();
 const signing = new Map();
 export const attachmentUrlExpiresAt = (path) => signedUrls.get(path)?.expiresAt || 0;
+export const attachmentUrlValidUntil = (path) => signedUrls.get(path)?.validUntil || 0;
 export const guideId = (tripId, activityId) => `guide:${tripId}:${activityId}`;
 export const notebookId = (tripId) => `notebook:${tripId}`;
 export const emptyDocument = (id, tripId, title, activityId = null, parentId = null) => ({
@@ -79,7 +80,8 @@ export async function attachmentUrl(path) {
   const request = (async () => {
     const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, ATTACHMENT_URL_TTL_SECONDS);
     if (error) throw error;
-    signedUrls.set(path, { url: data.signedUrl, expiresAt: Date.now() + (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000 });
+    const validUntil = Date.now() + ATTACHMENT_URL_TTL_SECONDS * 1000;
+    signedUrls.set(path, { url: data.signedUrl, expiresAt: validUntil - 300 * 1000, validUntil });
     return data.signedUrl;
   })().finally(() => signing.delete(path));
   signing.set(path, request);

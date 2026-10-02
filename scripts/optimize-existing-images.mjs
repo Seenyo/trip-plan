@@ -35,6 +35,10 @@ for (const [index,path] of paths.entries()) {
   await writeFile(source,Buffer.from(await data.arrayBuffer()),{mode:0o600});
   const sizes=JSON.parse(execFileSync(process.env.PYTHON_BIN || 'python3',
     [fileURLToPath(new URL('./compress-attachment.py',import.meta.url)),source,full,thumbnail],{encoding:'utf8'}));
+  if (sizes.skipped) {
+    console.log(`Image ${index+1}/${paths.length}: skipped ${sizes.reason}; original retained`);
+    continue;
+  }
   const id=crypto.randomUUID();
   const folder=path.slice(0,path.lastIndexOf('/'));
   const fullPath=sizes.full<sizes.original ? `${folder}/${id}.webp` : path;

@@ -7,7 +7,8 @@ from PIL import Image, ImageOps
 source, full_path, thumbnail_path = map(Path, sys.argv[1:4])
 with Image.open(source) as image:
     if getattr(image, 'is_animated', False):
-        raise ValueError('Animated image: leave its original unchanged')
+        print(json.dumps({'skipped': True, 'reason': 'animated', 'original': source.stat().st_size}))
+        sys.exit(0)
     image = ImageOps.exif_transpose(image).convert('RGBA')
     for output, edge, quality in [(full_path, 1600, 82), (thumbnail_path, 480, 75)]:
         variant = image.copy()
