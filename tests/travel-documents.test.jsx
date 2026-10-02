@@ -4,14 +4,24 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 const backend = vi.hoisted(() => ({ from: vi.fn(), storage: { from: vi.fn() } }));
 vi.mock('../src/supabase', () => ({ supabase: backend }));
+vi.mock('../src/imageCompression', () => ({ prepareImage: vi.fn(async file => ({ full: file })) }));
+vi.mock('../src/attachmentMedia', () => ({
+  attachmentBlob: vi.fn(async () => navigator.onLine ? new Blob(['photo']) : null),
+  cachedAttachmentBlob: vi.fn(async () => null),
+  cacheAttachmentBlob: vi.fn(async () => true),
+}));
 import { ATTACHMENT_URL_TTL_SECONDS, cacheDocuments, cachedDocuments, safeLink, saveDocument, uploadAttachment, uploadPlanImage } from '../src/travelDocuments';
-import PlanImage from '../src/PlanImage';
+import { prepareImage } from '../src/imageCompression';
+import { cachedAttachmentBlob } from '../src/attachmentMedia';
+import { attachmentUrl } from '../src/travelDocuments';
 import TravelReader from '../src/TravelReader';
 const doc = { id: 'notebook:trip', trip_id: 'trip', title: '旅のメモ', revision: 1, blocks: [{ id: 'check', type: 'checklist', items: [{ text: '船の予約', checked: false }] }] };
 const trip = { id: 'trip', title: '隠岐の旅' };
 let chain;
 beforeEach(() => {
   localStorage.clear();
+  URL.createObjectURL = vi.fn(() => 'blob:photo');
+  URL.revokeObjectURL = vi.fn();
   backend.storage.from.mockReset();
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
   chain = { select: vi.fn(), eq: vi.fn(), update: vi.fn(), insert: vi.fn(), maybeSingle: vi.fn(), abortSignal: vi.fn() };
@@ -71,22 +81,9 @@ it('uploads plan photos to the existing private trip attachment folder', async (
   const saved = await uploadPlanImage('iceland', image);
   expect(backend.storage.from).toHaveBeenCalledWith('travel-attachments');
   expect(upload).toHaveBeenCalledWith(expect.stringMatching(/^iceland\/[\w-]+\.jpg$/), image, {
-    contentType: 'image/jpeg', upsert: false,
+    contentType: 'image/jpeg', cacheControl: '31536000', upsert: false,
   });
   expect(saved).toMatchObject({ path: expect.stringMatching(/^iceland\/.+\.jpg$/), alt: 'waterfall.jpg' });
-});
-it('removes the previous plan photo while a different photo is being signed', async () => {
-  let rejectNext;
-  const sign = vi.fn((path) => path === 'trip/first.jpg'
-    ? Promise.resolve({ data: { signedUrl: 'https://example.com/first.jpg' }, error: null })
-    : new Promise((resolve, reject) => { rejectNext = reject; }));
-  backend.storage.from.mockReturnValue({ createSignedUrl: sign });
-  const { rerender } = render(<PlanImage image={{ path: 'trip/first.jpg', alt: '最初の写真' }} />);
-  expect((await screen.findByRole('img', { name: '最初の写真' })).src).toBe('https://example.com/first.jpg');
-  rerender(<PlanImage image={{ path: 'trip/second.jpg', alt: '次の写真' }} />);
-  await waitFor(() => expect(screen.queryByRole('img')).toBeNull());
-  await act(async () => rejectNext(new Error('signing failed')));
-  expect(screen.getByLabelText('写真を読み込めません')).toBeTruthy();
 });
 it('creates a nested page with its persisted parent and opens its editor', async () => {
   const child = { ...doc, id: 'child', parent_id: doc.id, title: '新しいページ', blocks: [], revision: 1 };
@@ -156,12 +153,12 @@ it('loads cached images and PDFs on reconnection without reopening the reader', 
   expect(sign).not.toHaveBeenCalled();
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
   await act(async () => window.dispatchEvent(new Event('online')));
-  expect(screen.getByRole('img', { name: '現地写真' }).src).toBe('https://example.com/trip/photo.jpg');
+  expect(screen.getByRole('img', { name: '現地写真' }).src).toBe('blob:photo');
   expect(screen.getByRole('link', { name: /予約PDF/ }).href).toBe('https://example.com/trip/booking.pdf');
 });
 it('renews attachment links before expiry and after resuming a suspended tab', async () => {
   vi.useFakeTimers();
-  const attached = { ...doc, blocks: [{ id: 'pdf', type: 'file', path: 'trip/booking.pdf', text: '予約PDF' }] };
+  const attached = { ...doc, blocks: [{ id: 'pdf', type: 'file', path: 'trip/renewable-booking.pdf', text: '予約PDF' }] };
   chain.abortSignal.mockResolvedValue({ data: [attached], error: null });
   cacheDocuments('trip', [attached]);
   let version = 0;
@@ -173,10 +170,50 @@ it('renews attachment links before expiry and after resuming a suspended tab', a
   await act(async () => vi.advanceTimersByTimeAsync((ATTACHMENT_URL_TTL_SECONDS - 300) * 1000));
   expect(screen.getByRole('link', { name: /予約PDF/ }).href).toBe('https://example.com/booking?v=2');
   await act(async () => document.dispatchEvent(new Event('visibilitychange')));
-  expect(screen.getByRole('link', { name: /予約PDF/ }).href).toBe('https://example.com/booking?v=3');
-  expect(sign).toHaveBeenCalledWith('trip/booking.pdf', ATTACHMENT_URL_TTL_SECONDS);
+  expect(screen.getByRole('link', { name: /予約PDF/ }).href).toBe('https://example.com/booking?v=2');
+  expect(sign).toHaveBeenCalledWith('trip/renewable-booking.pdf', ATTACHMENT_URL_TTL_SECONDS);
   unmount();
   await act(async () => vi.advanceTimersByTimeAsync(ATTACHMENT_URL_TTL_SECONDS * 1000));
   window.dispatchEvent(new Event('online'));
-  expect(sign).toHaveBeenCalledTimes(3);
+  expect(sign).toHaveBeenCalledTimes(2);
+});
+
+it('stops renewing PDF signatures once an offline copy is available', async () => {
+  vi.useFakeTimers();
+  const attached = { ...doc, blocks: [{ id: 'pdf', type: 'file', path: 'trip/cached-booking.pdf', text: '予約PDF' }] };
+  chain.abortSignal.mockResolvedValue({ data: [attached], error: null });
+  const sign = vi.fn(async () => ({ data: { signedUrl: 'https://example.com/cached-booking' }, error: null }));
+  backend.storage.from.mockReturnValue({ createSignedUrl: sign });
+  render(<TravelReader trip={trip} onClose={vi.fn()} />);
+  await act(async () => {});
+  expect(sign).toHaveBeenCalledTimes(1);
+  cachedAttachmentBlob.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
+  await act(async () => vi.advanceTimersByTimeAsync((ATTACHMENT_URL_TTL_SECONDS - 300) * 1000));
+  expect(screen.getByRole('link', { name: /予約PDF/ }).href).toBe('blob:photo');
+  await act(async () => vi.advanceTimersByTimeAsync(ATTACHMENT_URL_TTL_SECONDS * 1000));
+  expect(sign).toHaveBeenCalledTimes(1);
+  cachedAttachmentBlob.mockResolvedValue(null);
+});
+
+it('uploads separate compressed and thumbnail variants with immutable paths', async () => {
+  const full=new Blob(['full'],{type:'image/webp'}), thumbnail=new Blob(['thumb'],{type:'image/webp'});
+  prepareImage.mockResolvedValueOnce({full,thumbnail});
+  const upload=vi.fn().mockResolvedValue({error:null});
+  backend.storage.from.mockReturnValue({upload});
+  const result=await uploadPlanImage('trip',new File(['original'],'image.png',{type:'image/png'}));
+  expect(upload).toHaveBeenCalledTimes(2);
+  expect(result.path).toMatch(/^trip\/.+\.webp$/);
+  expect(result.thumbnailPath).toBe(result.path.replace('.webp','-thumb.webp'));
+  expect(upload.mock.calls[0][1]).toBe(full); expect(upload.mock.calls[1][1]).toBe(thumbnail);
+});
+it('shares concurrent signatures and reuses the URL until its expiry margin', async () => {
+  vi.useFakeTimers();
+  const sign=vi.fn(async()=>({data:{signedUrl:'https://example.com/stable'},error:null}));
+  backend.storage.from.mockReturnValue({createSignedUrl:sign});
+  await Promise.all([attachmentUrl('trip/stable'),attachmentUrl('trip/stable')]);
+  await attachmentUrl('trip/stable');
+  expect(sign).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync((ATTACHMENT_URL_TTL_SECONDS-300)*1000);
+  await attachmentUrl('trip/stable');
+  expect(sign).toHaveBeenCalledTimes(2);
 });

@@ -1,8 +1,8 @@
-import { attachmentUrl, cacheDocuments, cachedDocuments, loadDocuments } from './travelDocuments';
+import { cacheDocuments, cachedDocuments, loadDocuments } from './travelDocuments';
 
-const MEDIA_CACHE = 'roam-trip-media-v1';
+import { attachmentBlob, cacheAttachmentBlob } from './attachmentMedia';
+export { cachedAttachmentBlob as offlineAttachmentBlob } from './attachmentMedia';
 const manifestKey = (tripId) => `roam.offlineTrip.v1.${tripId}`;
-const mediaRequest = (path) => new Request(new URL(`./__offline_media__/${encodeURIComponent(path)}`, window.location.href));
 
 export function offlineTripManifest(tripId) {
   try { return JSON.parse(localStorage.getItem(manifestKey(tripId)) || 'null'); } catch { return null; }
@@ -19,7 +19,7 @@ function documentsSnapshot(documents) {
     revision: document.revision || 0,
     attachments: (document.blocks || [])
       .filter((block) => ['image', 'file'].includes(block.type) && block.path)
-      .map((block) => ({ id: block.id, type: block.type, path: block.path }))
+      .map((block) => ({ id: block.id, type: block.type, path: block.path, ...(block.thumbnailPath ? { thumbnailPath: block.thumbnailPath } : {}) }))
       .sort((a, b) => `${a.id}:${a.path}`.localeCompare(`${b.id}:${b.path}`)),
   })).sort((a, b) => String(a.id).localeCompare(String(b.id))));
 }
@@ -53,32 +53,21 @@ export function offlineTripSnapshots() {
     });
 }
 
-export async function offlineAttachmentBlob(path) {
-  if (!path || !('caches' in window)) return null;
-  const response = await (await caches.open(MEDIA_CACHE)).match(mediaRequest(path));
-  return response ? response.blob() : null;
-}
-
 async function cacheAttachment(path) {
-  const signedUrl = await attachmentUrl(path);
-  if (!signedUrl) throw new Error('添付ファイルのURLを取得できませんでした。');
-  const response = await fetch(signedUrl);
-  if (!response.ok) throw new Error(`添付ファイルを取得できませんでした（${response.status}）。`);
-  const blob = await response.blob();
-  await (await caches.open(MEDIA_CACHE)).put(mediaRequest(path), new Response(blob, {
-    headers: { 'Content-Type': blob.type || 'application/octet-stream' },
-  }));
+  const blob = await attachmentBlob(path);
+  if (!blob) throw new Error('添付ファイルを取得できませんでした。');
+  if (!await cacheAttachmentBlob(path, blob)) throw new Error('端末に添付ファイルを保存できませんでした。');
 }
 
 const tripMediaPaths = (trip, documents) => [...new Set([
   ...trip.days.flatMap((day) => day.activities.flatMap((activity) => (
     activity.images || []
-  )).map((image) => typeof image === 'string' ? image : image?.path)),
+  )).flatMap((image) => typeof image === 'string' ? [image] : [image?.path, image?.thumbnailPath])),
   ...(trip.bookmarks || []).flatMap((bookmark) => bookmark.images || [])
-    .map((image) => typeof image === 'string' ? image : image?.path),
+    .flatMap((image) => typeof image === 'string' ? [image] : [image?.path, image?.thumbnailPath]),
   ...documents.flatMap((document) => document.blocks
     .filter((block) => ['image', 'file'].includes(block.type))
-    .map((block) => block.path)),
+    .flatMap((block) => [block.path, block.thumbnailPath])),
 ].filter(Boolean))];
 
 async function ensureShellIsReady() {

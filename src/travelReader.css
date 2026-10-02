@@ -36,6 +36,7 @@
 .document-table-scroll th, .document-table-scroll td { min-width: 120px; padding: 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; white-space: pre-wrap; }
 .document-table-scroll th { background: var(--soft); }
 .document-blocks figure { margin: 20px 0; }
+.document-blocks figure .plan-image-button { width: 100%; height: auto; min-height: 80px; }
 .document-blocks img { display: block; width: 100%; height: auto; max-height: 600px; object-fit: contain; border-radius: 12px; }
 .document-blocks figcaption { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .document-file { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; margin: 16px 0; background: white; }

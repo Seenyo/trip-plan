@@ -17,7 +17,7 @@ The map and place search use a Google Maps JavaScript API key configured when th
 
 The base map uses Google's default road-map colors and clickable place icons. Google chooses which business labels to show at each zoom level; zoom in or use place search for businesses not labeled on the map. More control over point-of-interest density would require a Google Cloud map ID and a cloud-based map style.
 
-Selecting a stop or bookmarked place on the map can show up to two Google Maps photos when it has no uploaded photo. Photos are fetched only while that place is selected, with author credit and a link to the original photo on Google Maps. Existing stops without a place ID are matched by name within 2 km of their coordinates; unmatched stops show no Google photo. New places selected from search retain their place ID. Google photos are not saved to the trip or its offline copy, and photo requests may incur Google Maps Platform charges.
+Google Maps photo retrieval is disabled to prevent photo API charges. Stops and bookmarks can still show uploaded images.
 
 Tap a named place on the map or select a search result to add it to the itinerary or save it as a trip-specific bookmark. Bookmarks stay separate from dated plans, use the ご飯・自然・施設・スーパー・遺跡・オブジェ・その他 categories, and can be extended with your own trip-specific categories. They appear as small colored pins. The 候補 button opens a searchable, filterable list; selecting a saved place focuses it on the map. Bookmarks are stored with the trip in the shared workspace and in its offline copy.
 
@@ -60,6 +60,16 @@ Documents live in `travel_documents`, separate from itinerary writes. A revision
 Use the download button beside the trip title while online to save the selected trip for offline use. It stores the itinerary, all guide/notebook text, itinerary photos, notebook images and PDFs on that device, and asks the browser to keep the storage when supported. Production builds cache the app shell, so the saved trip can reopen with no connection. Google Maps, place search, routes, EV/Bónus discovery and external links remain online-only. Saving again refreshes the local copy. Browser storage can still be cleared by the user or operating system, so this is a travel copy rather than a permanent backup.
 
 Images (JPEG/PNG/WebP/GIF) and PDFs up to 10MB are stored in the non-public `travel-attachments` bucket and opened using short-lived signed URLs. The same bucket stores up to eight photos attached directly to each itinerary plan; those photos appear in the timeline and map detail card. **The workspace still has no authentication: anyone who has the site and public client configuration can read/edit the shared trips, documents and attachments. The bucket is not a personal vault for sensitive reservation/identity information.** Removed blocks and detached plan photos retain uploaded files rather than permanently deleting attachments.
+
+New images are compressed locally before uploading: full-size previews have a maximum edge of 1600px, and thumbnails 480px. WebP is used when supported; the original is kept if it is smaller, and animated GIFs retain their animation when expanded. Lists load visible thumbnails; opening an image loads its larger variant. Image bytes are cached on the device by immutable storage path and reused even when online. Map/timeline/reader views share downloads, and returning to the app does not renew or redownload already loaded images. Offline saving includes both variants. PDFs retain expiring links unless a saved device copy is available. Browser cache eviction or unavailable storage may require downloading again.
+
+To optimize existing referenced images, the script requires Python with Pillow. It defaults to a preview, preserves originals, saves a private local backup and variant manifest, and checks revisions before updating references:
+
+```bash
+node scripts/optimize-existing-images.mjs
+node scripts/optimize-existing-images.mjs --write
+# Set PYTHON_BIN if Pillow is installed in a different Python environment.
+```
 
 Original researched Japanese content and source links are in `scripts/guide-content.mjs` (checked 2026-09-16). Seed against the current workspace after applying the document migrations:
 
