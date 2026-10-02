@@ -1,7 +1,12 @@
 import { supabase } from './supabase';
+import { prepareImage } from './imageCompression';
+import { cacheAttachmentBlob } from './attachmentMedia';
 
 const cacheKey = (tripId) => `roam.documents.v1.${tripId}`;
 export const ATTACHMENT_URL_TTL_SECONDS = 3600;
+const signedUrls = new Map();
+const signing = new Map();
+export const attachmentUrlExpiresAt = (path) => signedUrls.get(path)?.expiresAt || 0;
 export const guideId = (tripId, activityId) => `guide:${tripId}:${activityId}`;
 export const notebookId = (tripId) => `notebook:${tripId}`;
 export const emptyDocument = (id, tripId, title, activityId = null, parentId = null) => ({
@@ -45,22 +50,40 @@ export async function uploadAttachment(tripId, file) {
   const types = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
   if (!types.includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error('画像（JPEG・PNG・WebP・GIF）かPDFを選んでください。上限は10MBです。');
   if (!supabase || !navigator.onLine) throw new Error('添付にはインターネット接続が必要です。');
-  const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf' }[file.type];
-  const path = `${tripId}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from('travel-attachments').upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw error;
-  return { ...newBlock(file.type === 'application/pdf' ? 'file' : 'image'), path, text: file.name };
+  const prepared = file.type.startsWith('image/') ? await prepareImage(file) : { full: file };
+  const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf' };
+  const id = crypto.randomUUID();
+  const path = `${tripId}/${id}.${extensions[prepared.full.type]}`;
+  const store = supabase.storage.from('travel-attachments');
+  const upload = async (target, blob) => {
+    const { error } = await store.upload(target, blob, { contentType: blob.type, cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+    await cacheAttachmentBlob(target, blob);
+  };
+  await upload(path, prepared.full);
+  const thumbnailPath = prepared.thumbnail && prepared.thumbnail !== prepared.full
+    ? `${tripId}/${id}-thumb.${extensions[prepared.thumbnail.type]}` : undefined;
+  if (thumbnailPath) await upload(thumbnailPath, prepared.thumbnail);
+  return { ...newBlock(file.type === 'application/pdf' ? 'file' : 'image'), path, ...(thumbnailPath ? { thumbnailPath } : {}), text: file.name };
 }
 export async function uploadPlanImage(tripId, file) {
   if (!file.type.startsWith('image/')) throw new Error('予定には画像ファイルを追加してください。');
   const block = await uploadAttachment(tripId, file);
-  return { id: block.id, path: block.path, alt: file.name };
+  return { id: block.id, path: block.path, ...(block.thumbnailPath ? { thumbnailPath: block.thumbnailPath } : {}), alt: file.name };
 }
 export async function attachmentUrl(path) {
   if (!supabase || !navigator.onLine) return null;
-  const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, ATTACHMENT_URL_TTL_SECONDS);
-  if (error) throw error;
-  return data.signedUrl;
+  const cached = signedUrls.get(path);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+  if (signing.has(path)) return signing.get(path);
+  const request = (async () => {
+    const { data, error } = await supabase.storage.from('travel-attachments').createSignedUrl(path, ATTACHMENT_URL_TTL_SECONDS);
+    if (error) throw error;
+    signedUrls.set(path, { url: data.signedUrl, expiresAt: Date.now() + (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000 });
+    return data.signedUrl;
+  })().finally(() => signing.delete(path));
+  signing.set(path, request);
+  return request;
 }
 export function documentText(doc) {
   return [doc.title, ...doc.blocks.map((block) => {

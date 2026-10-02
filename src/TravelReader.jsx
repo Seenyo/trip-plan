@@ -1,72 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowDown, ArrowUp, BookOpen, Check, ChevronRight, FileText, Plus, StickyNote, Trash2, Upload, X } from 'lucide-react';
-import { ATTACHMENT_URL_TTL_SECONDS, attachmentUrl, cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
-import { offlineAttachmentBlob } from './offlineTrip';
+import { cachedDocuments, cacheDocuments, documentText, emptyDocument, guideId, loadDocuments, newBlock, notebookId, safeLink, saveDocument, uploadAttachment } from './travelDocuments';
+import PlanImage from './PlanImage';
+import { useAttachmentMedia } from './useAttachmentMedia';
 import './travelReader.css';
 
 const blockTypes = { heading: '見出し', text: '文章', bullets: '箇条書き', checklist: 'チェックリスト', link: 'リンク', table: '表' };
 const draftKey = (id) => `roam.document-draft.v1.${id}`;
 function Attachment({ block }) {
-  const [url, setUrl] = useState(null);
-  const [failed, setFailed] = useState(false);
-  const localUrl = useRef(null);
-  useEffect(() => {
-    let active = true;
-    let request = 0;
-    let timer;
-    setUrl(null); setFailed(false);
-    const replaceLocalUrl = (next = null) => {
-      if (localUrl.current) URL.revokeObjectURL(localUrl.current);
-      localUrl.current = next;
-    };
-    const refresh = async () => {
-      const currentRequest = ++request;
-      clearTimeout(timer);
-      let delay = 60000;
-      try {
-        let value = navigator.onLine ? await attachmentUrl(block.path) : null;
-        if (!value) {
-          const blob = await offlineAttachmentBlob(block.path);
-          if (blob) {
-            if (!active || currentRequest !== request) return;
-            value = URL.createObjectURL(blob);
-            replaceLocalUrl(value);
-          }
-        } else replaceLocalUrl();
-        if (!active || currentRequest !== request) return;
-        if (value) {
-          setUrl(value); setFailed(false);
-          // Renew with a five-minute margin; resume events also cover suspended tabs.
-          if (!localUrl.current) delay = (ATTACHMENT_URL_TTL_SECONDS - 300) * 1000;
-        }
-      } catch {
-        if (!active || currentRequest !== request) return;
-        const blob = await offlineAttachmentBlob(block.path).catch(() => null);
-        if (!active || currentRequest !== request) return;
-        if (blob) {
-          const local = URL.createObjectURL(blob);
-          replaceLocalUrl(local);
-          setUrl(local); setFailed(false);
-        } else setFailed(true);
-      }
-      if (active && currentRequest === request) timer = setTimeout(refresh, delay);
-    };
-    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
-    refresh();
-    window.addEventListener('online', refresh);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', visible);
-    return () => {
-      active = false; clearTimeout(timer); replaceLocalUrl();
-      window.removeEventListener('online', refresh);
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', visible);
-    };
-  }, [block.path]);
-  if (!url) return <p className="attachment-placeholder"><FileText size={18} />{block.text}<small>{failed ? '添付を開けません。接続を確認してください。自動で再試行します。' : '添付はオンラインで開けます'}</small></p>;
-  return block.type === 'image' ? <figure><a href={url} target="_blank" rel="noreferrer"><img src={url} alt={block.text || '添付画像'} loading="lazy" /></a><figcaption>{block.text}</figcaption></figure>
-    : <a className="document-file" href={url} target="_blank" rel="noreferrer"><FileText size={22} /><span>{block.text}<small>PDFを開く</small></span><ChevronRight size={18} /></a>;
+  const file = useAttachmentMedia(block.type === 'file' ? block.path : null, { download: false });
+  if (block.type === 'image') return <figure><PlanImage image={{ ...block, alt: block.text || '添付画像' }} expandable /><figcaption>{block.text}</figcaption></figure>;
+  if (!file.url) return <p className="attachment-placeholder"><FileText size={18} />{block.text}<small>{file.failed ? '添付を開けません。接続を確認してください。' : '添付はオンラインで開けます'}</small></p>;
+  return <a className="document-file" href={file.url} target="_blank" rel="noreferrer"><FileText size={22} /><span>{block.text}<small>PDFを開く</small></span><ChevronRight size={18} /></a>;
 }
 function ReadBlock({ block, onCheck, disabled }) {
   if (block.type === 'heading') return <h2>{block.text}</h2>;

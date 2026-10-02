@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 
 const oldTrip = {
@@ -17,8 +17,10 @@ const oldTrip = {
 vi.mock('../src/useSharedWorkspace', () => ({
   useSharedWorkspace: () => ({ trips: [oldTrip], setTrips: vi.fn(), syncStatus: 'local' }),
 }));
-vi.mock('../src/offlineTrip', async (importOriginal) => ({
-  ...await importOriginal(), offlineAttachmentBlob: vi.fn().mockResolvedValue(new Blob(['photo'])),
+vi.mock('../src/attachmentMedia', () => ({
+  attachmentBlob: vi.fn().mockResolvedValue(new Blob(['photo'])),
+  cachedAttachmentBlob: vi.fn().mockResolvedValue(new Blob(['photo'])),
+  cacheAttachmentBlob: vi.fn().mockResolvedValue(true),
 }));
 
 it('offers new and past trips, then preserves the half sheet when a plan is selected', async () => {
@@ -54,6 +56,7 @@ it('offers new and past trips, then preserves the half sheet when a plan is sele
   sheet.scrollTop = 150;
   for (const container of [sheet, detail]) {
     const photo = await within(container).findByRole('button', { name: 'B地点の写真を拡大' });
+    await waitFor(() => expect(photo.disabled).toBe(false));
     fireEvent.click(photo);
     expect(screen.getByRole('dialog', { name: '写真を拡大表示' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '写真を閉じる' }));
